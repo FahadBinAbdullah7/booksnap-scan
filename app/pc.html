@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BookSnap PC Remote</title>
+  <meta name="description" content="Control the BookSnap phone scanner from your computer: live view, capture, save pages to a folder.">
+  <meta name="theme-color" content="#0f172a">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/app.css">
+  <link rel="stylesheet" href="css/pc.css">
+</head>
+<body class="pc">
+  <header class="bar">
+    <div class="brand"><span class="logo">📚</span> BookSnap <span class="tag">PC Remote</span></div>
+    <div class="spacer"></div>
+    <span class="pill" id="status">Starting…</span>
+  </header>
+
+  <div class="pc-main">
+    <section class="live-col">
+      <div class="live" id="live">
+        <video id="video" playsinline muted autoplay></video>
+        <canvas id="overlay"></canvas>
+        <div class="flash" id="flash"></div>
+        <div class="live-empty" id="liveEmpty">
+          <div class="big-emoji">📱</div>
+          <p><b>Connect your phone</b> to see its camera here.</p>
+        </div>
+      </div>
+      <div class="controls">
+        <button class="btn capture" id="capture" disabled>📸 Capture <kbd>Space</kbd></button>
+        <button class="btn" id="undo" disabled title="Delete the last photo and shoot it again">↶ Retake <kbd class="dark">⌫</kbd></button>
+        <div class="seg" id="segMode"><button data-v="single" disabled>📄 1 page</button><button data-v="spread" disabled>📖 2 pages</button></div>
+        <div class="seg" id="segOrient"><button data-v="portrait" disabled>▯ Portrait</button><button data-v="landscape" disabled>▭ Landscape</button></div>
+        <div class="seg" id="segAuto"><button data-v="manual" disabled>✋ Manual</button><button data-v="auto" disabled>🤖 Auto</button></div>
+        <button class="btn" id="lockbtn" disabled>🔓 Lock area</button>
+        <select class="btn" id="filter" disabled>
+          <option value="magic">Magic Color</option><option value="original">Original</option>
+          <option value="gray">Grayscale</option><option value="bw">B&amp;W</option>
+        </select>
+        <button class="btn" id="torch" disabled>🔦</button>
+      </div>
+      <div class="warnbar hidden" id="blurwarn"></div>
+      <p class="hint" id="hint">Pages are numbered in reading order: in 2-page mode the left page comes first, then the right page. Keys: <kbd class="dark">Space</kbd> capture · <kbd class="dark">⌫</kbd>/<kbd class="dark">Z</kbd> retake last. A Bluetooth foot pedal or presenter clicker that sends Space works too.</p>
+    </section>
+
+    <aside class="side">
+      <div class="card" id="pair">
+        <h3>Connect your phone</h3>
+        <div class="qr" id="qr"></div>
+        <ol class="steps">
+          <li>Open <b>BookSnap</b> on your phone, open a book and tap <b>💻 PC</b>.</li>
+          <li>Point the phone at this QR code.<br><span class="muted">Or tap “Type code” in the app and enter:</span></li>
+        </ol>
+        <div class="code" id="code">······</div>
+        <button class="btn small" id="newcode">New code</button>
+      </div>
+
+      <div class="card hidden" id="session">
+        <h3 id="bookName">Book</h3>
+        <p class="muted" id="counts">0 pages received</p>
+        <div class="col">
+          <button class="btn primary" id="folder">📁 Choose save folder</button>
+          <p class="muted small" id="folderInfo">Not saving to a folder yet. Pages are kept in this tab.</p>
+          <label class="check"><input type="checkbox" id="originals"> Also save the original photos</label>
+          <button class="btn" id="pdf" disabled>⬇ Make PDF</button>
+          <button class="btn" id="sync">⇅ Get all pages from phone</button>
+        </div>
+      </div>
+
+      <div class="card thumbs-card hidden" id="thumbsCard">
+        <h3>Latest pages</h3>
+        <div class="thumbs" id="thumbs"></div>
+      </div>
+    </aside>
+  </div>
+  <div id="modal-root"></div>
+  <script src="vendor/peerjs.min.js"></script>
+  <script src="vendor/qrcode.js"></script>
+  <script type="module" src="js/pc-boot.js"></script>
+</body>
+</html>

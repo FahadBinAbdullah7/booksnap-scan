@@ -1,0 +1,29 @@
+# dependencies / builds
+node_modules/
+android/build/
+android/app/build/
+android/.gradle/
+android/.idea/
+android/local.properties
+android/capacitor-cordova-android-plugins/build/
+android/app/src/main/assets/public/
+*.apk
+*.aab
+
+# secrets — never commit
+*.keystore
+*.jks
+.env
+.env.*
+app/.vercel/
+.vercel/
+
+# local Python / scans / junk
+.venv/
+__pycache__/
+pages/
+raw/
+book.pdf
+.DS_Store
+android/app/src/main/assets/capacitor.config.json
+android/app/src/main/assets/capacitor.plugins.json

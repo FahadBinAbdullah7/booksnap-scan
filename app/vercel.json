@@ -1,0 +1,12 @@
+{
+  "redirects": [
+    { "source": "/", "destination": "/pc", "permanent": false }
+  ],
+  "rewrites": [
+    { "source": "/pc", "destination": "/pc.html" },
+    { "source": "/app", "destination": "/index.html" }
+  ],
+  "headers": [
+    { "source": "/(.*)", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] }
+  ]
+}
