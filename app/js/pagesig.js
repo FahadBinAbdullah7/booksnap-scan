@@ -31,9 +31,10 @@ export function pageCrop(f, bbox, W = 200, fixedH = 0) {
 
 // Fingerprint: lightly blurred, brightness/contrast normalised (so a lamp
 // change or exposure change does not look like a new page). Stored as bytes.
-export function fingerprint(c) {
+export function fingerprint(c, blur = true) {
   const { w, h, d } = c, b = new Float32Array(w * h);
-  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+  if (!blur) b.set(d);
+  if (blur) for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
     let s = 0, n = 0;
     for (let k = -1; k <= 1; k++) for (let j = -1; j <= 1; j++) {
       const yy = y + k, xx = x + j;
@@ -74,7 +75,7 @@ export function distance(a, b, maxShift = 6, step = 2) {
 // Tile-wise comparison: every tile of the page is aligned on its own (handles a
 // slight tilt / perspective change of the book), then the median tile score is
 // used (a thumb or shadow on one tile does not matter).
-export function tileDistance(a, b, cols = 4, rows = 5, maxShift = 10, stopAbove = Infinity) {
+export function tileDistance(a, b, cols = 4, rows = 5, maxShift = 10, stopAbove = Infinity, minTex = 8) {
   if (!a || !b || a.w !== b.w || Math.abs(a.h - b.h) > 4) return 1e9;
   const w = a.w, h = Math.min(a.h, b.h), m = maxShift;
   const tw = Math.floor((w - 2 * m) / cols), th = Math.floor((h - 2 * m) / rows);
@@ -86,10 +87,22 @@ export function tileDistance(a, b, cols = 4, rows = 5, maxShift = 10, stopAbove 
     }
     return s / Math.max(1, n);
   };
-  const scores = [], half = Math.floor((rows * cols) / 2) + 1;
-  let above = 0;
+  // only tiles with something in them count (text, lines, edges); plain table or blank margin
+  // looks the same on every photo and would make different pages look alike
+  const texture = (f, tx, ty) => {
+    let s1 = 0, s2 = 0, n = 0;
+    for (let y = ty; y < ty + th; y += 3) for (let x = tx; x < tx + tw; x += 3) { const v = f.d[y * w + x]; s1 += v; s2 += v * v; n++; }
+    const mu = s1 / n; return Math.sqrt(Math.max(0, s2 / n - mu * mu));
+  };
+  const tiles = [];
   for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
     const tx = m + c * tw, ty = m + r * th;
+    if (Math.max(texture(a, tx, ty), texture(b, tx, ty)) >= minTex) tiles.push([tx, ty]);
+  }
+  if (tiles.length < 4) { tiles.length = 0; for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) tiles.push([m + c * tw, m + r * th]); }
+  const scores = [], half = Math.floor(tiles.length / 2) + 1;
+  let above = 0;
+  for (const [tx, ty] of tiles) {
     let best = 1e9, bx = 0, by = 0;
     for (let dy = -m; dy <= m; dy += 2) for (let dx = -m; dx <= m; dx += 2) {
       const v = tileScore(tx, ty, dx, dy);
@@ -111,4 +124,5 @@ export function tileDistance(a, b, cols = 4, rows = 5, maxShift = 10, stopAbove 
 // it <= 8.9, a different page of the same book >= 12.8.
 export const SIG_W = 320;
 export const SAME_PAGE = 11.5;
-export const isSame = (a, b) => tileDistance(a, b, 4, 5, 10, SAME_PAGE) < SAME_PAGE;
+// cut: the "same page" limit for this book (the app learns it from pages it saved)
+export const isSame = (a, b, cut = SAME_PAGE) => tileDistance(a, b, 4, 5, 10, cut) < cut;

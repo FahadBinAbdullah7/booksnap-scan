@@ -693,7 +693,8 @@ export function bookCheck(img, geo, pts = null, preT) {
   const areaFrac = (area * step * step) / (w * h);
   if (areaFrac < 0.15) return { ok: false, why: "small", text: 0 };
   const textRows = rowsWithText.size;                       // ~2 % tall bands that contain letters
-  const hasText = !!T && T.area > 0.06 && textRows >= 8 && glyphIn / area > 0.004;
+  const locked = !!pts;
+  const hasText = !!T && T.area > (locked ? 0.03 : 0.06) && textRows >= (locked ? 5 : 8) && glyphIn / area > (locked ? 0.002 : 0.004);
   // paper brightness inside the page
   const hist = new Uint32Array(256);
   for (let i = 0; i < w * h; i++) if (pageMask[i]) hist[gray[i]]++;
@@ -730,10 +731,12 @@ export function bookCheck(img, geo, pts = null, preT) {
     for (let y = Math.round(T.y0 + my); y <= T.y1 - my; y += step) for (let x = Math.round(T.x0 + mx); x <= T.x1 - mx; x += step) { n++; const l = lab[y * w + x]; if (l && border.has(l)) c++; }
     coveredText = n ? c / n : 0;
   }
-  const coveredFrac = Math.max(covered / Math.max(1, innerArea), coveredText);
-  if (coveredFrac > 0.035) return { ok: false, why: "covered", text: textRows, covered: +coveredFrac.toFixed(3) };
+  // only what covers the TEXT counts (the page area can include some table around the page,
+  // especially a locked area — a dark or wooden table must not look like a hand)
+  const coveredFrac = T ? coveredText : covered / Math.max(1, innerArea);
+  if (coveredFrac > 0.015) return { ok: false, why: "covered", text: textRows, covered: +coveredFrac.toFixed(3) };
   if (!hasText) return { ok: false, why: "notext", text: textRows, covered: +coveredFrac.toFixed(3) };
-  return { ok: true, why: "", text: textRows, covered: +coveredFrac.toFixed(3) };
+  return { ok: true, why: "", text: textRows, covered: +coveredFrac.toFixed(3), textBox: T ? { x0: T.x0 / w, x1: T.x1 / w, y0: T.y0 / h, y1: T.y1 / h } : null };
 }
 // ---------------------------------------------------------------- page detection
 // Finds the book/page (bright, low-saturation region) and, in "spread" mode,

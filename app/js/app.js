@@ -1161,7 +1161,13 @@ async function viewScan(bookId, pcCode = null) {
     const f = cam.frame(640);
     if (!f) return null;
     const g = lock ? P.geoFromLock(lock) : geo;
-    if (g && g.found && g.pages && g.pages.length) {
+    const tb = lock && bookRes && bookRes.ok && bookRes.textBox;
+    if (tb) {
+      // locked area: compare the text block inside it (a big lock also holds table, which looks
+      // the same on every photo)
+      const mx = (tb.x1 - tb.x0) * 0.04, my = (tb.y1 - tb.y0) * 0.04;
+      fpBox = { x0: Math.max(0, tb.x0 - mx), y0: Math.max(0, tb.y0 - my), x1: Math.min(1, tb.x1 + mx), y1: Math.min(1, tb.y1 + my) };
+    } else if (g && g.found && g.pages && g.pages.length) {
       let x0 = 1, y0 = 1, x1 = 0, y1 = 0;
       for (const q of currentRegions()) for (const [x, y] of q) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
       if (x1 - x0 > 0.2 && y1 - y0 > 0.2) fpBox = { x0: Math.max(0, x0), y0: Math.max(0, y0), x1: Math.min(1, x1), y1: Math.min(1, y1) };
@@ -1172,16 +1178,30 @@ async function viewScan(bookId, pcCode = null) {
   }
   // is this page one we already saved in this session? (newest first)
   // (gives the screen a breather every few comparisons, so the preview never stutters)
+  // "same page" limit for this book: half the typical difference between pages saved one after
+  // another (they are different pages) — books with a very regular layout get a lower limit
+  const diffHist = [];
+  const sameCut = () => {
+    if (diffHist.length < 2) return 6;
+    const s_ = [...diffHist].sort((a, b) => a - b);
+    return Math.min(PS.SAME_PAGE, Math.max(3.5, s_[s_.length >> 1] * 0.5));
+  };
   async function seenBefore(sig, fp) {
+    const cut = sameCut();
     for (let i = seenPages.length - 1, n = 0; i >= 0; i--, n++) {
       if (n && n % 6 === 0) await new Promise((r) => setTimeout(r, 0));
       const e = seenPages[i];
-      if (e.fp && fp) { if (e.fp.w === fp.w && PS.isSame(e.fp, fp)) return seenPages.length - i; }
+      if (e.fp && fp) { if (e.fp.w === fp.w && e.fp.h === fp.h && PS.isSame(e.fp, fp, cut)) return seenPages.length - i; }
       else if (e.sig && sig && !pageChanged(e.sig, sig)) return seenPages.length - i;
     }
     return 0;
   }
   function rememberPage(sig, fp) {
+    const prev = seenPages.length ? seenPages[seenPages.length - 1].fp : null;
+    if (prev && fp && prev.w === fp.w && prev.h === fp.h) {
+      const d = PS.tileDistance(prev, fp);
+      if (d < 1e8) { diffHist.push(d); if (diffHist.length > 30) diffHist.shift(); }
+    }
     seenPages.push({ sig, fp });
     const k = seenPages.length - 1 - FP_KEEP;
     if (k >= 0) seenPages[k].fp = null;          // keep memory small on long books
@@ -1421,7 +1441,9 @@ async function viewScan(bookId, pcCode = null) {
     if (!running) return;
     requestAnimationFrame(loop);
     if (now - lastMotion > 100) { lastMotion = now; motionStep(now); }
-    if (now - lastDetect > (prof.detectEvery || 300)) { lastDetect = now; detectStep(); }
+    // Auto, picture still, waiting for a page check from a still frame: check back to back
+    const waitingCheck = autoOn() && stillSince && !(bookRes && bookRes.at >= stillSince);
+    if (now - lastDetect > (waitingCheck ? 60 : prof.detectEvery || 300)) { lastDetect = now; detectStep(); }
   }
 
   // hardware shutter: volume keys / Bluetooth remote (app), Enter or Space (keyboard remotes)
