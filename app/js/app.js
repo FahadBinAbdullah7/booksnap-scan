@@ -229,7 +229,12 @@ async function viewLibrary() {
   // Android app: offer new versions from GitHub
   if (N.isNative()) {
     const lib = app.querySelector("main.lib");
-    Upd.installedVersion().then((v) => { const e = app.querySelector("#appver"); if (e && v) e.textContent = "BookSnap " + v; });
+    Upd.installedVersion().then((v) => {
+      const e = app.querySelector("#appver"); if (e && v) e.textContent = "BookSnap " + v;
+      // first start after an update: say so
+      let last = null; try { last = localStorage.getItem("booksnap.lastVersion"); localStorage.setItem("booksnap.lastVersion", v || ""); } catch {}
+      if (v && last && last !== v) toast(`✓ Updated to BookSnap ${v}`, 4000);
+    });
     Upd.banner(lib).catch(() => {});
     app.querySelector("#chkupd").onclick = (e) => { e.preventDefault(); toast("Checking…"); Upd.banner(lib, { force: true, toast }).catch(() => {}); };
   }
