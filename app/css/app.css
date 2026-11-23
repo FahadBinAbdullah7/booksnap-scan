@@ -222,3 +222,7 @@ html:has(body.native-cam), body.native-cam, body.native-cam #app, body.native-ca
 .tab.active { background: var(--card, #fff); box-shadow: 0 1px 4px rgba(0,0,0,.12); }
 .tab .tabn { display: inline-block; min-width: 20px; padding: 0 6px; margin-left: 4px; border-radius: 999px; font-size: 12px; line-height: 20px; background: rgba(100,116,139,.2); }
 .newhint { margin: 8px 2px 14px; }
+
+/* ---- home: version + update button at the top (Android app) */
+.updrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 12px; }
+.updrow .btn.small { padding: 7px 12px; font-size: 14px; }

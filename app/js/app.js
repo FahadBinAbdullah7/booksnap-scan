@@ -209,6 +209,7 @@ async function viewLibrary() {
     <header class="bar"><div class="brand"><span class="logo">📚</span> BookSnap</div><div style="flex:1"></div>
       <button class="icon" id="help" aria-label="How to use">?</button></header>
     <main class="lib">
+      ${N.isAndroid() ? `<div class="updrow"><span id="appver" class="muted small"></span><button class="btn small" id="chkupd">⬆ Check for updates</button></div>` : ""}
       <div class="tabs" role="tablist">
         <button class="tab${tab === "book" ? " active" : ""}" data-tab="book" role="tab">📖 Book scan <span class="tabn">${nBook}</span></button>
         <button class="tab${tab === "doc" ? " active" : ""}" data-tab="doc" role="tab">📄 Regular scan <span class="tabn">${nDoc}</span></button>
@@ -229,7 +230,6 @@ async function viewLibrary() {
         : `<div class="empty"><div class="big-emoji">📄</div><p>No regular scans yet.</p><p class="muted">Tap <b>New scan</b> to photograph documents, receipts or single sheets.</p></div>`}
       <p class="storage">${st.quota ? `Stored on this device: ${fmtBytes(st.usage)} of ${fmtBytes(st.quota)} available` : ""}
       ${st.persisted ? " · protected ✓" : ""}</p>
-      ${N.isAndroid() ? `<p class="storage"><span id="appver"></span> · <a href="#" id="chkupd">Check for updates</a></p>` : ""}
     </main>`;
   app.querySelectorAll(".tab").forEach((t) => (t.onclick = () => { settings.homeTab = t.dataset.tab; saveSettings(); viewLibrary(); }));
   if (app.querySelector("#new")) app.querySelector("#new").onclick = async () => {
