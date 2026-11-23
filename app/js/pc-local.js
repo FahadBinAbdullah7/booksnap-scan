@@ -88,6 +88,7 @@ export async function start(session) {
         state = { ...state, ...m };
         $("bookName").textContent = state.book || "Book";
         UI.showState(state);
+        UI.rotateLive(state.rotate);
         $("filter").value = state.filter;
         $("torch").classList.toggle("hidden", !state.torch);
         showFolder(); counts();
@@ -260,9 +261,11 @@ export async function start(session) {
       for (let k = 16; k >= 0; k--) { const x = pg.x0 + ((pg.x1 - pg.x0) * k) / 16; ctx.lineTo(...pt(x, P.evalCurve(pg.bot, x))); }
       ctx.closePath(); ctx.fill(); ctx.stroke();
       const mx = (pg.x0 + pg.x1) / 2, [lx, ly] = pt(mx, (P.evalCurve(pg.top, mx) + P.evalCurve(pg.bot, mx)) / 2);
-      ctx.fillStyle = "rgba(15,23,42,.75)"; ctx.beginPath(); ctx.arc(lx, ly, 22, 0, Math.PI * 2); ctx.fill();
+      ctx.save(); ctx.translate(lx, ly); ctx.rotate((-(state.rotate || 0) * Math.PI) / 180);
+      ctx.fillStyle = "rgba(15,23,42,.75)"; ctx.beginPath(); ctx.arc(0, 0, 22, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = "#fff"; ctx.font = "bold 18px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.fillText(String(state.count + i + 1), lx, ly);
+      ctx.fillText(String(state.count + i + 1), 0, 0);
+      ctx.restore();
     });
   }
 

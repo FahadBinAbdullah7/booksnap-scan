@@ -6,7 +6,7 @@ import { editLock, ptsFromGeo, defaultPts } from "./lockedit.js";
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-export const CONTROL_IDS = ["capture", "undo", "segMode", "segOrient", "segAuto", "lockbtn", "filter", "torch"];
+export const CONTROL_IDS = ["capture", "undo", "segMode", "segOrient", "segAuto", "lockbtn", "rotbtn", "filter", "torch"];
 
 export function setControlsEnabled(on) {
   for (const id of CONTROL_IDS) {
@@ -23,6 +23,7 @@ export function setupControls(send, getState, getFrame) {
   pick("segMode", (v) => send({ t: "mode", mode: v }));
   pick("segOrient", (v) => send({ t: "orient", v }));
   pick("segAuto", (v) => send({ t: "auto", on: v === "auto" }));
+  if ($("rotbtn")) $("rotbtn").onclick = () => send({ t: "rotate" });
   $("lockbtn").onclick = async () => {
     const st = getState();
     let fresh = false;
@@ -97,9 +98,12 @@ export function drawGeo(overlay, vw, vh, geo, rotate, firstPageNo) {
     const q = pg.quad || P.pageQuad(pg);
     const cx = q.reduce((a, p) => a + p[0], 0) / 4, cy = q.reduce((a, p) => a + p[1], 0) / 4;
     const [lx, ly] = pt(cx, cy);
-    ctx.fillStyle = "rgba(15,23,42,.75)"; ctx.beginPath(); ctx.arc(lx, ly, 22, 0, Math.PI * 2); ctx.fill();
+    // the live view is turned (rotateLive); keep the number upright
+    ctx.save(); ctx.translate(lx, ly); ctx.rotate((-(rotate || 0) * Math.PI) / 180);
+    ctx.fillStyle = "rgba(15,23,42,.75)"; ctx.beginPath(); ctx.arc(0, 0, 22, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = "#fff"; ctx.font = "bold 18px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillText(String(firstPageNo + i), lx, ly);
+    ctx.fillText(String(firstPageNo + i), 0, 0);
+    ctx.restore();
   });
 }
 
@@ -163,3 +167,23 @@ export function handleReply(m) {
   p.done(m);
   return true;
 }
+
+// Show the phone's picture the right way up: turn the camera picture and its outline layer
+// together by the rotation the phone uses for the pages (portrait or landscape — no tilting
+// your head). The outline is drawn in the picture's own coordinates, so it stays on the pages.
+let liveRot = 0;
+export function rotateLive(rotate) {
+  liveRot = ((+rotate || 0) % 360 + 360) % 360;
+  const live = $("live");
+  if (!live) return;
+  const W = live.clientWidth, H = live.clientHeight, side = liveRot === 90 || liveRot === 270;
+  for (const el of [$("video"), $("liveimg"), $("overlay")]) {
+    if (!el) continue;
+    if (!liveRot) { el.style.cssText = el.style.cssText.replace(/(width|height|left|top|right|bottom|inset|transform)\s*:[^;]*;?/g, ""); continue; }
+    el.style.inset = "auto";
+    el.style.width = (side ? H : W) + "px"; el.style.height = (side ? W : H) + "px";
+    el.style.left = (side ? (W - H) / 2 : 0) + "px"; el.style.top = (side ? (H - W) / 2 : 0) + "px";
+    el.style.transform = `rotate(${liveRot}deg)`;
+  }
+}
+addEventListener("resize", () => rotateLive(liveRot));

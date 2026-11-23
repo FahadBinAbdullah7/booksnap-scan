@@ -113,7 +113,7 @@ async function onMessage(m) {
         if (lastBmp) lastBmp.close();
         lastBmp = bmp;
         let img = $("liveimg");
-        if (!img) { img = document.createElement("img"); img.id = "liveimg"; img.alt = ""; overlay.before(img); video.classList.add("hidden"); }
+        if (!img) { img = document.createElement("img"); img.id = "liveimg"; img.alt = ""; overlay.before(img); video.classList.add("hidden"); UI.rotateLive(state.rotate); }
         const old = img.src;
         img.src = URL.createObjectURL(blob);
         if (old.startsWith("blob:")) setTimeout(() => URL.revokeObjectURL(old), 1000);
@@ -126,6 +126,7 @@ async function onMessage(m) {
       state = { ...state, ...m };
       $("bookName").textContent = state.book || "Book";
       UI.showState(state);
+      UI.rotateLive(state.rotate);
       $("filter").value = state.filter;
       $("torch").classList.toggle("hidden", !state.torch);
       if (bookChanged) { pages.clear(); $("thumbs").innerHTML = ""; bookDir = null; if (rootDir) await openBookDir(); }
@@ -365,9 +366,11 @@ function detectLoop() {
     ctx.closePath(); ctx.fill(); ctx.stroke();
     // page number label: left = N, right = N+1
     const [lx, ly] = pt((pg.x0 + pg.x1) / 2, (P.evalCurve(pg.top, (pg.x0 + pg.x1) / 2) + P.evalCurve(pg.bot, (pg.x0 + pg.x1) / 2)) / 2);
-    ctx.fillStyle = "rgba(15,23,42,.75)"; ctx.beginPath(); ctx.arc(lx, ly, 22, 0, Math.PI * 2); ctx.fill();
+    ctx.save(); ctx.translate(lx, ly); ctx.rotate((-(state.rotate || 0) * Math.PI) / 180);
+    ctx.fillStyle = "rgba(15,23,42,.75)"; ctx.beginPath(); ctx.arc(0, 0, 22, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = "#fff"; ctx.font = "bold 18px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillText(String(state.count + i + 1), lx, ly);
+    ctx.fillText(String(state.count + i + 1), 0, 0);
+    ctx.restore();
     ctx.fillStyle = "rgba(34,197,94,0.12)";
   });
 }
