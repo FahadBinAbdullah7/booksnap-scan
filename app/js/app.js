@@ -735,6 +735,7 @@ async function viewScan(bookId, pcCode = null) {
   const effRotate = () => ((cam.native ? 0 : orient === "landscape" && cam.size.h > cam.size.w ? 90 : 0) + settings.rotate) % 360;
   // auto mode: page-number check
   let lastNum = book.lastPageNo ?? null;   // last printed page number seen
+  let numGuess = null;                     // a printed number not yet confirmed by the next photo
   let paused = false, checking = false;
   let turnSeen = false;           // Auto: a page turn was seen since the last saved page
   const noiseHist = [];
@@ -850,7 +851,7 @@ async function viewScan(bookId, pcCode = null) {
     settings.auto = v === "auto"; saveSettings(); paused = false; labels(); sendState();
     state = autoOn() ? "watch" : "idle"; stillSince = 0;
     if (settings.auto) {
-      note(`🤖 Auto: turn the page, it shoots ${settings.delay}s after the page is still and checks the page number`, 4000);
+      note(`🤖 Auto: turn the page, it shoots ${settings.delay}s after the page is still — pages already saved are skipped`, 4000);
       PN.init().catch(() => {});          // load the page-number reader in the background
     }
   };
@@ -1226,9 +1227,10 @@ async function viewScan(bookId, pcCode = null) {
       const sig = opts.sig || blockSig(cam.frame(320));
       const fp = opts.auto ? pageFp() : null;
       const regions = currentRegions();
-      // Auto: a page we already saved? Without page numbers that settles it before taking the photo.
+      // Auto: a page we already saved? The PICTURE decides (page numbers can be misread — Roman
+      // numerals, numbers inside tables…), before the photo is even taken.
       const dupAgo = opts.auto ? await seenBefore(sig, fp) : 0;
-      if (dupAgo && lastNum == null) {
+      if (dupAgo) {
         lastShotSig = sig; turnSeen = false;
         note(dupAgo === 1 ? "Same page as the last photo — not saved. Turn to the next page." : `Already saved this page (${dupAgo} photos ago) — not saved. Turn to the next page.`, 3500);
         return;
@@ -1236,23 +1238,6 @@ async function viewScan(bookId, pcCode = null) {
       cam.frame(240);
       const preview = cam.small.toDataURL("image/jpeg", 0.6);
       const blob = await cam.takePhoto();
-      // Auto: only save when the printed page number moved on
-      let num = null;
-      if (opts.auto) {
-        setStatus("Reading page number…");
-        num = await PN.readNumberFromPhoto(blob, regions, lastNum != null ? lastNum + 1 : null).catch(() => null);
-        // a page we already saved? (works even when no number is visible)
-        if (dupAgo && (num == null || num <= lastNum)) {
-          lastShotSig = sig; turnSeen = false;
-          note(`Already saved this page — not saved again. Turn to the next page.`, 3500);
-          return;
-        }
-        if (num != null && lastNum != null && num <= lastNum) {
-          lastShotSig = sig; turnSeen = false;                       // this picture is "seen": wait for a different page
-          note(`Same page (${num}) — not saved. Turn to page ${lastNum + 1}.`, 3500);
-          return;                                  // (finally below resets busy)
-        }
-      }
       beep();
       try { navigator.vibrate?.(60); } catch {}
       $("#lastimg").src = preview;
@@ -1267,17 +1252,29 @@ async function viewScan(bookId, pcCode = null) {
       savedAt = performance.now();
       setStatus(mode === "spread" ? `Saved pages ${count - 1}–${count} ✓` : `Saved page ${count} ✓`);
       if (opts.auto) {
-        if (num != null) {
-          if (lastNum != null && num > lastNum + 1)
-            note(`⚠ Page ${num} saved — page${num - lastNum - 1 > 1 ? "s" : ""} ${lastNum + 1}${num - lastNum - 1 > 1 ? "–" + (num - 1) : ""} may be missing.`, 6000);
-          else note(ps.length > 1 ? `✓ Pages ${num}–${num + 1} saved` : `✓ Page ${num} saved`, 2500);
-          lastNum = num + ps.length - 1;
-        } else {
-          if (lastNum != null) lastNum += ps.length;
-          note(`✓ Saved (page number not visible)`, 2500);
-        }
-        book = { ...book, lastPageNo: lastNum };
-        DB.saveBook(book);
+        // the page number is only read for the message and the "pages missing?" warning — after
+        // saving, in the background, so it never slows down or blocks a photo
+        const expected = lastNum != null ? lastNum + 1 : null, n = ps.length;
+        if (lastNum != null) lastNum += n;                      // until the number is read
+        const first = count - n + 1;
+        PN.readNumberFromPhoto(blob, regions, expected).catch(() => null).then((num) => {
+          if (!running) return;
+          // trust printed numbers only once two photos in a row agree (a number inside the text,
+          // a Roman-numeral page… must not count); after that: the next one or a small jump forward
+          let fits = false;
+          if (expected != null) fits = num != null && num >= expected && num <= expected + 6;
+          else if (num != null && numGuess != null && num === numGuess + 1) fits = true;
+          else numGuess = num != null ? num + n - 1 : null;
+          if (fits) {
+            if (expected != null && num > expected)
+              note(`⚠ Page ${num} saved — page${num - expected > 1 ? "s" : ""} ${expected}${num - expected > 1 ? "–" + (num - 1) : ""} may be missing.`, 6000);
+            else note(n > 1 ? `✓ Pages ${num}–${num + 1} saved` : `✓ Page ${num} saved`, 2500);
+            lastNum = num + n - 1;
+            numGuess = null;
+          } else note(n > 1 ? `✓ Pages ${first}–${first + 1} saved` : `✓ Page ${first} saved`, 2500);
+          book = { ...book, lastPageNo: lastNum };
+          DB.saveBook(book);
+        });
       }
       if (remote()) {
         const nums = ps.map((_, i) => count - ps.length + 1 + i);
