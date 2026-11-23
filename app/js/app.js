@@ -204,15 +204,19 @@ async function viewLibrary() {
     <header class="bar"><div class="brand"><span class="logo">📚</span> BookSnap</div><div style="flex:1"></div>
       <button class="icon" id="help" aria-label="How to use">?</button></header>
     <main class="lib">
-      <button class="btn primary big" id="new">＋ New book</button>
+      <div class="newrow">
+        <button class="btn primary big" id="new">📖 Book scan</button>
+        <button class="btn big" id="newdoc">📄 Regular scan</button>
+      </div>
+      <p class="muted small newhint">Book scan: finds the pages, splits 2-page spreads, Auto mode. Regular scan: plain photos — crop and filter afterwards.</p>
       ${books.length ? `<div class="books">${books.map((b, i) => `
         <a class="book" href="#/book/${b.id}">
           <div class="cover" data-cover="${b.id}"></div>
-          <div class="info"><div class="name">${esc(b.name)}</div>
+          <div class="info"><div class="name">${b.kind === "doc" ? "📄 " : ""}${esc(b.name)}</div>
           <div class="meta">${counts[i]} pages · ${fmtDate(b.updated)}</div></div>
           <span class="chev">›</span>
         </a>`).join("")}</div>`
-      : `<div class="empty"><div class="big-emoji">📖</div><p>No books yet.</p><p class="muted">Tap <b>New book</b>, put your book under the phone and start scanning.</p></div>`}
+      : `<div class="empty"><div class="big-emoji">📖</div><p>No books yet.</p><p class="muted">Tap <b>Book scan</b> for a book, or <b>Regular scan</b> for documents and single sheets.</p></div>`}
       <p class="storage">${st.quota ? `Stored on this device: ${fmtBytes(st.usage)} of ${fmtBytes(st.quota)} available` : ""}
       ${st.persisted ? " · protected ✓" : ""}</p>
       ${N.isAndroid() ? `<p class="storage"><span id="appver"></span> · <a href="#" id="chkupd">Check for updates</a></p>` : ""}
@@ -222,6 +226,13 @@ async function viewLibrary() {
     if (!name) return;
     DB.askPersist();
     const b = await DB.createBook(name);
+    go("#/scan/" + b.id);
+  };
+  app.querySelector("#newdoc").onclick = async () => {
+    const name = await ask("Scan name", "Scan " + new Date().toLocaleString(), "Create");
+    if (!name) return;
+    DB.askPersist();
+    const b = await DB.createBook(name, "doc");
     go("#/scan/" + b.id);
   };
   app.querySelector("#help").onclick = showHelp;
@@ -673,7 +684,8 @@ function diffFrac(a, b, thr = 20) {
 async function viewScan(bookId, pcCode = null) {
   let book = await DB.get("books", bookId);
   if (!book) return go("#/");
-  let mode = book.mode || "spread";
+  const isDoc = book.kind === "doc";                       // regular scan: plain camera, no detection
+  let mode = isDoc ? "single" : book.mode || "spread";
   let count = await DB.countPages(bookId);
 
   app.innerHTML = `
@@ -703,6 +715,10 @@ async function viewScan(bookId, pcCode = null) {
   document.body.classList.add("dark");
   const $ = (s) => app.querySelector(s);
   const video = $(".cam"), overlay = $(".overlay"), statusEl = $("#status"), ringFg = $("#ringfg");
+  if (isDoc) {
+    for (const sel of ["#lockbtn", "#delay", "#pc", ".scan-opts"]) $(sel)?.classList.add("hidden");
+    $(".scan").classList.add("docscan");
+  }
   const cam = N.isAndroid() ? new NativeCamera() : new Camera(video);
   const prof = await Dev.profile().catch(() => ({}));
   cam.profile = prof;
@@ -726,11 +742,13 @@ async function viewScan(bookId, pcCode = null) {
   let link = null, pcOriginals = false, pcCodeLast = null, userUnlinked = false, reconnecting = false;
   const shots = [];               // captures taken in this session (for retake)
   const remote = () => !!(link && link.open);
-  const autoOn = () => !!settings.auto;
+  const autoOn = () => !!settings.auto && !isDoc;
   // Portrait / Landscape (per book). Landscape is the natural choice for 2 pages per photo.
   let orient = book.orient || "portrait";
   // locked page area (set once, reused for every photo until unlocked)
-  let lock = book.lock && book.lock.mode === mode ? book.lock : null;
+  // regular scan: the whole photo, every time (a fixed full-frame area, marked "plain")
+  const FULL = { mode: "single", pts: [[0, 0], [1, 0], [1, 1], [0, 1]], plain: true };
+  let lock = isDoc ? FULL : book.lock && book.lock.mode === mode ? book.lock : null;
   // web version: a sideways video in landscape mode is turned upright here; the app turns the screen instead
   const effRotate = () => ((cam.native ? 0 : orient === "landscape" && cam.size.h > cam.size.w ? 90 : 0) + settings.rotate) % 360;
   // auto mode: page-number check
@@ -779,7 +797,7 @@ async function viewScan(bookId, pcCode = null) {
     $("#auto").textContent = settings.auto && paused ? "⏸ Paused – tap" : "🤖 Auto";
     $("#auto").classList.toggle("warn", settings.auto && paused);
 
-    $("#delay").classList.toggle("hidden", remote() || !settings.auto);
+    $("#delay").classList.toggle("hidden", isDoc || remote() || !settings.auto);
     $("#delay").textContent = `⏱ ${settings.delay}s`;
     $("#rot").textContent = `⟳ ${settings.rotate}°`;
     $("#rot").classList.toggle("hidden", !settings.rotate && cam.native);
@@ -851,7 +869,7 @@ async function viewScan(bookId, pcCode = null) {
     settings.auto = v === "auto"; saveSettings(); paused = false; labels(); sendState();
     state = autoOn() ? "watch" : "idle"; stillSince = 0;
     if (settings.auto) {
-      note(`🤖 Auto: turn the page, it shoots ${settings.delay}s after the page is still — pages already saved are skipped`, 4000);
+      note(`🤖 Auto: turn the page, it shoots ${settings.delay}s after each page turn — pages already saved are skipped`, 4000);
       PN.init().catch(() => {});          // load the page-number reader in the background
     }
   };
@@ -1242,7 +1260,7 @@ async function viewScan(bookId, pcCode = null) {
       beep();
       try { navigator.vibrate?.(60); } catch {}
       $("#lastimg").src = preview;
-      const ps = await DB.addCapture(bookId, blob, { rotate: effRotate(), mode, filter: book.filter || "magic", lock: lock ? { mode: lock.mode, pts: lock.pts } : null });
+      const ps = await DB.addCapture(bookId, blob, { rotate: effRotate(), mode, filter: book.filter || "magic", lock: lock ? { mode: lock.mode, pts: lock.pts, ...(lock.plain ? { plain: true } : {}) } : null });
       count += ps.length;
       $("#count").textContent = count;
       lastShotSig = sig; turnSeen = false;
@@ -1333,39 +1351,41 @@ async function viewScan(bookId, pcCode = null) {
         setStatus(remote() ? "Connected — capture from the PC" : "Tap the button to shoot");
       return;
     }
-    // Auto: wait until the picture is still for `delay` seconds, then shoot if it is a
-    // different page than the last one saved (the page number is checked on the photo).
-    if (motion > STILL_T) {
+    // Auto: no "hold still" — after a page turn a countdown of `delay` seconds runs and then the
+    // photo is taken. Small shakes don't restart it; only a big movement (the next turn, a hand)
+    // does. Before the photo: is it a clean book page, and a page not saved yet?
+    const turnMsg = lastNum != null ? `Page ${lastNum} saved — turn to page ${lastNum + 1}` : "Turn the page";
+    if (motion > MOVE_T) {
       stillSince = 0; setRing(0);
-      if (now - savedAt > 2500) setStatus(motion > MOVE_T ? "Turning the page…" : "Hold still…");
+      if (now - savedAt > 2500) setStatus("Turning the page…");
+      return;
+    }
+    if (lastShotSig && !turnSeen) {             // no page turn since the last photo: nothing to count down for
+      stillSince = 0; setRing(0);
+      if (now - savedAt > 2500) setStatus(turnMsg);
       return;
     }
     if (!stillSince) stillSince = now;
     const el = (now - stillSince) / 1000;
-    // the page check must come from a frame taken after the picture went still
+    // the page check must come from a frame taken after the turn ended
     const fresh = bookRes && bookRes.at >= stillSince;
     const why = fresh && !bookRes.ok ? bookRes.why : "";
     const waitMsg = why === "covered" ? "✋ Something is covering the page — waiting"
       : why ? "📖 No book page in view — waiting" : "";
     if (el < settings.delay) {
       setRing(el / settings.delay);
-      if (now - savedAt > 2500) setStatus(waitMsg || "Hold still…");
+      if (now - savedAt > 2500) setStatus(waitMsg || `📸 Photo in ${Math.max(1, Math.ceil(settings.delay - el))}s`);
       return;
     }
     if (!fresh || !bookRes.ok) {                  // not a clean page (yet): no photo
-      setRing(fresh ? 0.98 : 1);
+      setRing(1);
       if (now - savedAt > 2500) setStatus(waitMsg || "Checking the page…");
       return;
     }
     const sig = blockSig(cam.frame(320));
-    if (lastShotSig && !turnSeen) {             // no page turn since the last photo -> keep waiting
-      setRing(0);
-      if (now - savedAt > 2500) setStatus(lastNum != null ? `Page ${lastNum} saved — turn to page ${lastNum + 1}` : "Turn the page");
-      return;
-    }
-    if (lastShotSig && !pageChanged(lastShotSig, sig)) {
-      setRing(0);
-      if (now - savedAt > 2500) setStatus(lastNum != null ? `Page ${lastNum} saved — turn to page ${lastNum + 1}` : "Turn the page");
+    if (lastShotSig && !pageChanged(lastShotSig, sig)) {   // moved, but still the same page
+      turnSeen = false; stillSince = 0; setRing(0);
+      if (now - savedAt > 2500) setStatus(turnMsg);
       return;
     }
     shoot({ auto: true, sig });
@@ -1421,6 +1441,7 @@ async function viewScan(bookId, pcCode = null) {
     if (running) { drawOverlay(); sendGeo(); }
   };
   function detectStep() {
+    if (isDoc) { geo = null; return; }                       // regular scan: no page detection
     const checking_ = autoOn() && !paused && !editing;
     if (lock) {
       geo = P.geoFromLock(lock); drawOverlay(); sendGeo();
@@ -1475,7 +1496,7 @@ async function viewScan(bookId, pcCode = null) {
     if (cam.canTorch) $("#torch").classList.remove("hidden");
     getWake();
     DB.askPersist();
-    setStatus(autoOn() ? "Hold still…" : "Tap the button to shoot");
+    setStatus(autoOn() ? "Auto: ready — the photo is taken a moment after each page turn" : "Tap the button to shoot");
     requestAnimationFrame(loop);
     if (pcCode === "qr") scanQR();
     else if (pcCode) connectPc(pcCode);

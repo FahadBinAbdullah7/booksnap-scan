@@ -46,7 +46,11 @@ self.onmessage = async (e) => {
       const img = loaded.img, geo = lock && lock.mode === mode ? P.geoFromLock(lock) : loaded.geo;
       const pages = [];
       for (const s of sides) {
-        const r = P.renderPage(img, geo, s.side, { filter: s.filter, crop: s.crop, rot: s.rot || 0, maxSide });
+        // regular scan: the whole photo as it is (no trimming, tilt fix or line straightening)
+        const plain = !!(lock && lock.plain);
+        const r = P.renderPage(img, geo, s.side, plain
+          ? { filter: s.filter, crop: s.crop, rot: s.rot || 0, maxSide, trimFrac: 0, deskew: false, straighten: false }
+          : { filter: s.filter, crop: s.crop, rot: s.rot || 0, maxSide });
         const full = await encode(r.page, s.filter === "bw" ? 0.8 : 0.88);
         const thumb = await encode(P.resize(r.page, 360), 0.7);
         pages.push({ full, thumb, w: r.page.w, h: r.page.h, autoQuad: r.autoQuad, sharp: r.sharp, skew: r.skew });

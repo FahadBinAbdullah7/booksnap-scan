@@ -215,3 +215,8 @@ html:has(body.native-cam), body.native-cam, body.native-cam #app, body.native-ca
 .update-banner .ub-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .update-banner .ub-status:empty { display: none; }
 @media (prefers-color-scheme: dark) { .update-banner { background: #052e1f; border-color: #10b981; color: #d1fae5; } .update-banner .ub-notes { color: #a7f3d0; } }
+
+/* ---- home: book scan / regular scan */
+.newrow { display: flex; gap: 10px; }
+.newrow .btn { flex: 1; }
+.newhint { margin: 8px 2px 14px; }

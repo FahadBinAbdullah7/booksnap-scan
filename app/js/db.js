@@ -76,9 +76,12 @@ export async function listBooks() {
   return books.sort((a, b) => b.updated - a.updated);
 }
 
-export async function createBook(name) {
+// kind "book": book scan (page detection, 2 pages, Auto…); "doc": regular scan (plain photos)
+export async function createBook(name, kind = "book") {
   const now = Date.now();
-  const b = { id: uid(), name, created: now, updated: now, nextOrder: 1, mode: "spread", filter: "magic" };
+  const b = kind === "doc"
+    ? { id: uid(), name, kind: "doc", created: now, updated: now, nextOrder: 1, mode: "single", filter: "original" }
+    : { id: uid(), name, created: now, updated: now, nextOrder: 1, mode: "spread", filter: "magic" };
   await put("books", b);
   return b;
 }
