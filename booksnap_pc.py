@@ -138,11 +138,39 @@ class Handler(SimpleHTTPRequestHandler):
         pass
 
     # ------------------------------------------------------------ helpers
+    # Only the BookSnap phone app may call this server from another origin (the PC page is
+    # served by this server itself = same origin). Other websites get no CORS headers, so a
+    # page open in the PC's browser cannot read the code or the scanned pages.
+    APP_ORIGINS = ("https://localhost", "http://localhost", "capacitor://localhost")
+
     def cors(self):
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
-        self.send_header("Access-Control-Allow-Private-Network", "true")
+        origin = self.headers.get("Origin")
+        if origin in self.APP_ORIGINS:
+            self.send_header("Access-Control-Allow-Origin", origin)
+            self.send_header("Vary", "Origin")
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type")
+            self.send_header("Access-Control-Allow-Private-Network", "true")
+
+    # DNS rebinding guard: a website's domain pointed at this computer must not count as local.
+    def host_ok(self):
+        host = (self.headers.get("Host") or "").rsplit(":", 1)[0].strip("[]").lower()
+        return host in ("localhost", "127.0.0.1", "::1") or re.fullmatch(r"\d{1,3}(\.\d{1,3}){3}", host) is not None
+
+    # wrong codes per address: 20 tries per 10 minutes, then blocked for a while
+    FAILS = {}
+    FAILS_LOCK = threading.Lock()
+
+    def too_many_fails(self):
+        ip, now = self.client_address[0], time.time()
+        with self.FAILS_LOCK:
+            fails = [t for t in self.FAILS.get(ip, []) if now - t < 600]
+            self.FAILS[ip] = fails
+            return len(fails) >= 20
+
+    def note_fail(self):
+        with self.FAILS_LOCK:
+            self.FAILS.setdefault(self.client_address[0], []).append(time.time())
 
     def reply(self, code=200, obj=None, body=None, ctype="application/json", extra=None):
         data = body if body is not None else json.dumps(obj if obj is not None else {"ok": True}).encode()
@@ -177,11 +205,15 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
+        if not self.host_ok():
+            return self.reply(403, {"error": "bad host"})
         if self.path.startswith("/api/"):
             return self.api("GET")
         return super().do_GET()
 
     def do_POST(self):
+        if not self.host_ok():
+            return self.reply(403, {"error": "bad host"})
         if self.path.startswith("/api/"):
             return self.api("POST")
         self.reply(404, {"error": "not found"})
@@ -202,8 +234,21 @@ class Handler(SimpleHTTPRequestHandler):
                     "qr": f"http://{ip}:{self.port}/?booksnap={hub.token}",
                     "folder": hub.folder, "book": hub.book, "platform": sys.platform,
                 })
-            if q.get("t", "").upper() != hub.token:
+            # other devices: blocked after 20 wrong codes in 10 minutes. This computer is never
+            # locked out (a website could otherwise lock out your own PC page), but every wrong
+            # code costs it half a second, which makes guessing hopeless.
+            if not self.local_client() and self.too_many_fails():
+                return self.reply(429, {"error": "too many wrong codes — wait a few minutes"})
+            if not secrets.compare_digest(q.get("t", "").upper(), hub.token):
+                self.note_fail()
+                if self.local_client():
+                    time.sleep(0.5)
                 return self.reply(403, {"error": "wrong code"})
+            # routes only the PC page (on this computer) uses; the phone never needs them
+            PC_ONLY = {("cmd", "POST"), ("events", "GET"), ("file", "GET"), ("file", "POST"), ("list", "GET"),
+                       ("choose-folder", "POST"), ("open-folder", "POST"), ("frame", "GET")}
+            if (route, method) in PC_ONLY and not self.local_client():
+                return self.reply(403, {"error": "this computer only"})
 
             # ---------------- phone side
             if route == "hello" and method == "POST":
@@ -286,7 +331,10 @@ class Handler(SimpleHTTPRequestHandler):
                 d = hub.book_dir()
                 return self.reply(obj=sorted(n for n in os.listdir(d) if re.fullmatch(r"\d{4}\.jpg", n)))
             if route == "file" and method == "POST":
-                name = os.path.basename(q.get("name", "file.bin"))
+                name = os.path.basename(q.get("name", ""))
+                # only PDFs and page images, with plain names
+                if name.startswith(".") or not re.fullmatch(r'[^/\\:*?"<>|\x00-\x1f]{1,150}\.(pdf|jpg)', name):
+                    return self.reply(400, {"error": "bad file name"})
                 with open(os.path.join(hub.book_dir(), name), "wb") as f:
                     f.write(self.body())
                 return self.reply(obj={"ok": True, "path": os.path.join(hub.book_dir(), name)})

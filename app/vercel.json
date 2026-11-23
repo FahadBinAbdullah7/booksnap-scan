@@ -1,12 +1,50 @@
 {
   "redirects": [
-    { "source": "/", "destination": "/pc", "permanent": false }
+    {
+      "source": "/",
+      "destination": "/pc",
+      "permanent": false
+    }
   ],
   "rewrites": [
-    { "source": "/pc", "destination": "/pc.html" },
-    { "source": "/app", "destination": "/index.html" }
+    {
+      "source": "/pc",
+      "destination": "/pc.html"
+    },
+    {
+      "source": "/app",
+      "destination": "/index.html"
+    }
   ],
   "headers": [
-    { "source": "/(.*)", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] }
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "Content-Security-Policy",
+          "value": "frame-ancestors 'none'"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(self), microphone=(), geolocation=()"
+        }
+      ]
+    }
   ]
 }

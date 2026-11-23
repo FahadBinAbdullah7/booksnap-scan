@@ -101,9 +101,9 @@ public class UpdaterPlugin extends Plugin {
 
     @PluginMethod
     public void install(PluginCall call) {
-        String path = call.getString("path");
-        File f = path == null ? null : new File(path);
-        if (f == null || !f.exists()) { call.reject("no file"); return; }
+        // only the APK this plugin downloaded itself (never another file path)
+        File f = new File(getContext().getCacheDir(), "update.apk");
+        if (!f.exists()) { call.reject("no file"); return; }
         try {
             // Android 8+: the user must allow BookSnap to install apps once
             if (Build.VERSION.SDK_INT >= 26 && !getContext().getPackageManager().canRequestPackageInstalls()) {

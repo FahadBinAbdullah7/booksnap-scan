@@ -1045,7 +1045,8 @@ async function viewScan(bookId, pcCode = null) {
       state = autoOn() ? "watch" : "idle"; stillSince = 0;
       if (settings.auto) PN.init().catch(() => {});
       sendState();
-    } else if (m.t === "lock" && Array.isArray(m.pts) && m.pts.length === (mode === "spread" ? 6 : 4)) {
+    } else if (m.t === "lock" && Array.isArray(m.pts) && m.pts.length === (mode === "spread" ? 6 : 4)
+      && m.pts.every((p) => Array.isArray(p) && p.length === 2 && p.every((v) => typeof v === "number" && v >= 0 && v <= 1))) {
       if (editing === "pc") editing = null;
       await setLock(m.pts);
       note(m.fresh ? "🔒 New page area locked from the PC" : "🔒 Page area locked from the PC", 3000);

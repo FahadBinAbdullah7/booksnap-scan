@@ -305,7 +305,13 @@ public class NativeCameraPlugin extends Plugin {
     @PluginMethod
     public void release(PluginCall call) {
         String p = call.getString("path");
-        if (p != null && p.contains("booksnap_cap_")) new File(p).delete();
+        if (p != null) {
+            // only our own photos in the app's cache folder
+            File f = new File(p);
+            try {
+                if (f.getName().startsWith("booksnap_cap_") && getContext().getCacheDir().getCanonicalPath().equals(f.getCanonicalFile().getParent())) f.delete();
+            } catch (java.io.IOException ignored) { }
+        }
         call.resolve();
     }
 

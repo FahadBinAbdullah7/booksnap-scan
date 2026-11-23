@@ -29,7 +29,9 @@ async function latest(force) {
   const r = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { headers: { Accept: "application/vnd.github+json" }, cache: "no-store" });
   if (!r.ok) throw new Error("GitHub " + r.status);
   const j = await r.json();
-  const apk = (j.assets || []).find((a) => /\.apk$/i.test(a.name));
+  // only an APK from this repository's own releases (Android also checks it is signed with our key)
+  const ok = (u) => typeof u === "string" && u.startsWith(`https://github.com/${REPO}/releases/download/`);
+  const apk = (j.assets || []).find((a) => /\.apk$/i.test(a.name) && ok(a.browser_download_url));
   const rel = apk ? { version: String(j.tag_name || "").replace(/^v/i, ""), url: apk.browser_download_url, size: apk.size, notes: (j.body || "").trim().slice(0, 600) } : null;
   try { localStorage.setItem(KEY, JSON.stringify({ at: Date.now(), rel })); } catch {}
   return rel;

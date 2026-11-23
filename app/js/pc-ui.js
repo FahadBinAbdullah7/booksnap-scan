@@ -50,7 +50,7 @@ export function setupControls(send, getState, getFrame) {
         note: "The phone uses exactly this area for every photo until you unlock it. Keys: + / − zoom, Tab next corner, arrows nudge, Enter lock.",
         hiRes: async () => {
           const r = await request(send, { t: "lock-photo-req" }, "lock-photo", 20000);
-          if (!r || !r.data) return null;
+          if (!r || typeof r.data !== "string" || !r.data.startsWith("data:image/jpeg;base64,")) return null;
           return createImageBitmap(await (await fetch(r.data)).blob());
         },
         detect: async () => (await request(send, { t: "detect-req" }, "detected", 8000))?.pts || null,
