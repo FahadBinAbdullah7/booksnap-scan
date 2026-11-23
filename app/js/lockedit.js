@@ -50,7 +50,8 @@ function rotated(src, rot, maxSide = 2400) {
  *  hiRes   async () => sharper picture (ImageBitmap/canvas) or null, same view as src
  *  refresh async () => { src, pts? } a new live picture (book moved)
  *  detect  async (src) => points found on the picture, or null
- * @returns Promise<points | null>
+ *  unlock  true: show an "Unlock" button (resolves with the string "unlock")
+ * @returns Promise<points | "unlock" | null>
  */
 export function editLock(o) {
   return new Promise((resolve) => {
@@ -81,6 +82,7 @@ export function editLock(o) {
         <button class="btn" data-a="fit" title="Show the whole picture (0)">⤢ Fit</button>
         ${o.detect ? `<button class="btn" data-a="detect" title="Find the page again on this picture">🎯 New area</button>` : ""}
         <button class="btn" data-a="whole" title="Start from a simple rectangle">⬚ Reset</button>
+        ${o.unlock ? `<button class="btn" data-a="unlock" title="Stop using a fixed area (pages are found automatically)">🔓 Unlock</button>` : ""}
         ${o.refresh ? `<button class="btn" data-a="refresh" title="Take a new picture from the camera (if the book moved)">📷 New picture</button>` : ""}
       </div>
       <div class="le-hint">Pinch or scroll to zoom · drag a corner ● or the middle of an edge ▬ · ✥ moves the whole area · drag outside to move the picture${o.note ? "<br>" + esc(o.note) : ""}</div>`;
@@ -322,6 +324,8 @@ export function editLock(o) {
     });
     wrap.querySelector('[data-a="cancel"]').onclick = () => done(null);
     wrap.querySelector('[data-a="ok"]').onclick = () => done(pts);
+    const ub = wrap.querySelector('[data-a="unlock"]');
+    if (ub) ub.onclick = () => done("unlock");
 
     let closed = false, hiResGen = 0;
     async function loadHiRes() {
@@ -340,7 +344,7 @@ export function editLock(o) {
       document.removeEventListener("keydown", onKey, true);
       removeEventListener("resize", resize);
       wrap.remove();
-      resolve(v ? v.map(([x, y]) => [+clamp01(x).toFixed(4), +clamp01(y).toFixed(4)]) : null);
+      resolve(v === "unlock" ? v : v ? v.map(([x, y]) => [+clamp01(x).toFixed(4), +clamp01(y).toFixed(4)]) : null);
     }
     addEventListener("resize", resize);
     requestAnimationFrame(() => { resize(); loadHiRes(); });

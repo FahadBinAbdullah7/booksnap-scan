@@ -687,7 +687,10 @@ function geoScore(geo, F, glyph, w, h) {
 // A frame is only worth a photo when it shows a page of text, and nothing (a hand,
 // an arm, the next page being turned) covers it. `pts`: the page area to check
 // (fractions: 4 corners, or 6 for a locked 2-page area) — default: the detected pages.
-export function bookCheck(img, geo, pts = null, preT) {
+// ref (optional, kept by the caller between frames, locked area only): where the paper was on the
+// last clean frame. A hand / arm is then anything new that covers that paper — also where the
+// text block shrank around it.
+export function bookCheck(img, geo, pts = null, preT, ref = null) {
   const { w, h, d } = img, gray = luma(img);
   const T = preT !== undefined ? preT : textBlock(gray, w, h);
   // page polygon(s) in pixels
@@ -728,7 +731,8 @@ export function bookCheck(img, geo, pts = null, preT) {
     if (T && T.glyph[i]) continue;
     const r = d[j], g = d[j + 1], b = d[j + 2], mx = Math.max(r, g, b), mn = Math.min(r, g, b);
     const sat = mx ? (mx - mn) / mx : 0;
-    if (gray[i] < paperV * 0.62 || (sat > 0.25 && r > b + 15 && gray[i] < paperV * 0.95)) occ[i] = 1;
+    if (gray[i] < paperV * 0.62 || (sat > 0.25 && r > b + 15 && gray[i] < paperV * 0.95)
+      || (sat > 0.18 && r > g + 12 && r > b + 25 && gray[i] < paperV * 0.97)) occ[i] = 1;     // skin (also pale, well lit)
   }
   const om = morph(morph(occ, w, h, 1, false), w, h, 2, true);
   const { lab, comps } = labelComponents(om, w, h);
@@ -752,9 +756,45 @@ export function bookCheck(img, geo, pts = null, preT) {
   }
   // only what covers the TEXT counts (the page area can include some table around the page,
   // especially a locked area — a dark or wooden table must not look like a hand)
-  const coveredFrac = T ? coveredText : covered / Math.max(1, innerArea);
+  let coveredFrac = T ? coveredText : covered / Math.max(1, innerArea);
+  // a hand over the text makes the text block shrink around it, so the text alone misses it
+  // (locked area, which may hold table: compare with where the paper was on the last clean frame)
+  let byPage = 0;
+  const G = 48, GR = Math.max(8, Math.round((G * h) / w)), cwp = w / G, chp = h / GR;
+  let paperCells = null;
+  if (locked && ref) {
+    const pc = new Float32Array(G * GR), oc = new Float32Array(G * GR), nc = new Float32Array(G * GR);
+    for (let y = 0; y < h; y += step) for (let x = 0; x < w; x += step) {
+      const i = y * w + x;
+      if (!pageMask[i]) continue;
+      const c = Math.min(GR - 1, (y / chp) | 0) * G + Math.min(G - 1, (x / cwp) | 0);
+      nc[c]++;
+      const j = i * 4, r = d[j], g = d[j + 1], b = d[j + 2], mx = Math.max(r, g, b);
+      const sat = mx ? (mx - Math.min(r, g, b)) / mx : 0;
+      if ((T && T.glyph[i]) || (gray[i] > paperV * 0.72 && sat < 0.22)) pc[c]++;
+      const l = lab[i];
+      if (l && border.has(l)) oc[c]++;
+    }
+    paperCells = new Float32Array(G * GR);
+    for (let c = 0; c < G * GR; c++) paperCells[c] = nc[c] ? pc[c] / nc[c] : 0;
+    if (ref.paper && ref.w === G && ref.h === GR) {
+      // only paper well inside the old page (2 cells in from its edge: the book may shift a little)
+      let base = 0, hit = 0;
+      for (let cy = 2; cy < GR - 2; cy++) for (let cx = 2; cx < G - 2; cx++) {
+        let solid = true;
+        for (let dy = -2; dy <= 2 && solid; dy++) for (let dx = -2; dx <= 2; dx++) if (ref.paper[(cy + dy) * G + cx + dx] < 0.7) { solid = false; break; }
+        if (!solid) continue;
+        base++;
+        const c = cy * G + cx;
+        if (nc[c] && oc[c] / nc[c] > 0.4) hit++;
+      }
+      if (base > 40) byPage = hit / base;
+    }
+  }
+  if (byPage > 0.03) coveredFrac = Math.max(coveredFrac, byPage);
   if (coveredFrac > 0.015) return { ok: false, why: "covered", text: textRows, covered: +coveredFrac.toFixed(3) };
   if (!hasText) return { ok: false, why: "notext", text: textRows, covered: +coveredFrac.toFixed(3) };
+  if (ref && paperCells && hasText) { ref.paper = paperCells; ref.w = G; ref.h = GR; }   // clean page: remember its paper
   return { ok: true, why: "", text: textRows, covered: +coveredFrac.toFixed(3), textBox: T ? { x0: T.x0 / w, x1: T.x1 / w, y0: T.y0 / h, y1: T.y1 / h } : null };
 }
 // ---------------------------------------------------------------- page detection

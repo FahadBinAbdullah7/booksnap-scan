@@ -696,7 +696,18 @@ async function viewScan(bookId, pcCode = null) {
   let book = await DB.get("books", bookId);
   if (!book) return go("#/");
   const isDoc = book.kind === "doc";                       // regular scan: plain camera, no detection
-  let mode = isDoc ? "single" : book.mode || "spread";
+  // from the page preview: "retake:<pageId>" (one photo replaces that page) or
+  // "insert:<pageId>" (photos go in right after that page); manual shutter only
+  let special = null;
+  const sm = /^(retake|insert):(.+)$/.exec(pcCode || "");
+  if (sm) {
+    pcCode = null;
+    const slot = await slotFor(bookId, sm[2], sm[1]);
+    if (!slot) return go("#/book/" + bookId);
+    const list = await DB.listPages(bookId);
+    special = { kind: sm[1], pageId: sm[2], slot, num: list.findIndex((p) => p.id === sm[2]) + 1, added: [] };
+  }
+  let mode = isDoc || (special && special.kind === "retake") ? "single" : book.mode || "spread";
   let count = await DB.countPages(bookId);
 
   app.innerHTML = `
@@ -707,6 +718,7 @@ async function viewScan(bookId, pcCode = null) {
         <button class="chip" id="pc">💻 PC</button>
         <button class="chip" id="lockbtn">🔓 Lock area</button>
         <button class="chip" id="delay"></button>
+        <button class="chip hidden" id="pause">⏸ Pause</button>
         <button class="chip" id="rot" title="Fix sideways photos"></button>
         <button class="chip hidden" id="torch">🔦</button>
         <button class="chip hidden" id="undo">↶ Retake</button>
@@ -730,6 +742,11 @@ async function viewScan(bookId, pcCode = null) {
     for (const sel of ["#lockbtn", "#delay", "#pc", ".scan-opts"]) $(sel)?.classList.add("hidden");
     $(".scan").classList.add("docscan");
   }
+  if (special) {
+    for (const sel of ["#delay", "#pc", "#segAuto"]) $(sel)?.classList.add("hidden");
+    if (special.kind === "retake") $("#segMode")?.classList.add("hidden");
+  }
+  const backTo = () => go(special ? "#/page/" + (special.added[0] || special.pageId) : "#/book/" + bookId);
   const cam = N.isAndroid() ? new NativeCamera() : new Camera(video);
   const prof = await Dev.profile().catch(() => ({}));
   cam.profile = prof;
@@ -753,7 +770,7 @@ async function viewScan(bookId, pcCode = null) {
   let link = null, pcOriginals = false, pcCodeLast = null, userUnlinked = false, reconnecting = false;
   const shots = [];               // captures taken in this session (for retake)
   const remote = () => !!(link && link.open);
-  const autoOn = () => !!settings.auto && !isDoc;
+  const autoOn = () => !!settings.auto && !isDoc && !special;
   // Portrait / Landscape (per book). Landscape is the natural choice for 2 pages per photo.
   let orient = book.orient || "portrait";
   // locked page area (set once, reused for every photo until unlocked)
@@ -806,9 +823,12 @@ async function viewScan(bookId, pcCode = null) {
     seg("segOrient", orient);
     seg("segAuto", settings.auto ? "auto" : "manual");
     $("#auto").textContent = settings.auto && paused ? "⏸ Paused – tap" : "🤖 Auto";
+    $("#pause").classList.toggle("hidden", !autoOn());
+    $("#pause").textContent = paused ? "▶ Start" : "⏸ Pause";
+    $("#pause").classList.toggle("warn", paused);
     $("#auto").classList.toggle("warn", settings.auto && paused);
 
-    $("#delay").classList.toggle("hidden", isDoc || remote() || !settings.auto);
+    $("#delay").classList.toggle("hidden", isDoc || !!special || remote() || !settings.auto);
     $("#delay").textContent = `⏱ ${settings.delay}s`;
     $("#rot").textContent = `⟳ ${settings.rotate}°`;
     $("#rot").classList.toggle("hidden", !settings.rotate && cam.native);
@@ -840,11 +860,12 @@ async function viewScan(bookId, pcCode = null) {
   const unlockAudio = () => { try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); audioCtx.resume(); } catch {} };
   app.querySelector(".scan").addEventListener("pointerdown", unlockAudio, { once: true });
 
-  $("#close").onclick = () => go("#/book/" + bookId);
-  $("#done").onclick = () => go("#/book/" + bookId);
-  $("#last").onclick = () => go("#/book/" + bookId);
+  $("#close").onclick = backTo;
+  $("#done").onclick = backTo;
+  $("#last").onclick = backTo;
   const setMode = async (m) => {
     mode = m;
+    if (special) { labels(); return; }         // adding pages: this time only, the book keeps its setting
     book = { ...book, mode };
     labels();                      // update the switch instantly, save in the background
     await DB.saveBook(book);
@@ -875,7 +896,7 @@ async function viewScan(bookId, pcCode = null) {
   $("#segAuto").onclick = (e) => {
     const v = e.target.closest("button")?.dataset.v;
     if (!v) return;
-    if (v === "auto" && settings.auto && paused) { paused = false; labels(); state = "watch"; note("▶ Auto continues — turn the page", 2500); return; }
+    if (v === "auto" && settings.auto && paused) { state = "watch"; setPaused(false); return; }
     if ((v === "auto") === !!settings.auto) return;
     settings.auto = v === "auto"; saveSettings(); paused = false; labels(); sendState();
     state = autoOn() ? "watch" : "idle"; stillSince = 0;
@@ -884,6 +905,12 @@ async function viewScan(bookId, pcCode = null) {
       PN.init().catch(() => {});          // load the page-number reader in the background
     }
   };
+  // Auto: pause / start the automatic photos (manual shutter still works)
+  const setPaused = (v) => {
+    paused = v; stillSince = 0; setRing(0); labels();
+    note(v ? "⏸ Auto paused — tap ▶ Start to continue" : "▶ Auto started — turn the page", 2500);
+  };
+  $("#pause").onclick = () => setPaused(!paused);
   $("#delay").onclick = () => {
     const opts = [1, 1.5, 2, 3, 4];
     settings.delay = opts[(opts.indexOf(settings.delay) + 1) % opts.length]; saveSettings(); labels();
@@ -896,22 +923,15 @@ async function viewScan(bookId, pcCode = null) {
   $("#shutter").onclick = () => shoot();
   $("#pc").onclick = () => (remote() ? disconnectPc(true) : scanQR());
   $("#undo").onclick = () => undoLast();
+  // Lock: tap → fix the area → 🔒 Lock. Tap again to change it (🎯 New area finds the page again)
+  // or to unlock — all inside the same screen.
   $("#lockbtn").onclick = async () => {
-    let fresh = false;
-    if (lock) {
-      const v = await sheet("Locked page area", [
-        { label: "✏️ Adjust the locked area (zoom in for exact corners)", value: "edit" },
-        { label: "🎯 New area — find the page again and lock it", value: "new" },
-        { label: "🔓 Unlock (automatic detection)", value: "unlock" },
-      ]);
-      if (v === "unlock") { await setLock(null); note("🔓 Unlocked — pages are detected automatically", 3000); return; }
-      if (v !== "edit" && v !== "new") return;
-      fresh = v === "new";
-    }
-    const pts = await lockEditor(fresh);
+    const pts = await lockEditor();
     if (!pts) return;
+    if (pts === "unlock") { await setLock(null); note("🔓 Unlocked — pages are detected automatically", 3000); return; }
+    const was = !!lock;
     await setLock(pts);
-    note("🔒 Area locked — every photo uses it until you unlock", 3500);
+    note(was ? "🔒 New area locked" : "🔒 Area locked — every photo uses it until you change or unlock it", 3500);
   };
 
   async function setLock(pts) {
@@ -957,19 +977,20 @@ async function viewScan(bookId, pcCode = null) {
 
   // full-screen editor: drag / zoom / move the area on the camera picture
   let editing = null;          // "phone" | "pc" while someone is adjusting the lock area (Auto waits)
-  async function lockEditor(fresh = false) {
+  async function lockEditor() {
     const src = livePicture();
     if (!src) { toast("Camera not ready yet"); return null; }
     editing = "phone";
     try {
-      let pts = !fresh && lock ? lock.pts : (lock ? await detectOnce() : ptsFromGeo(geo, mode));
+      const pts = lock ? lock.pts : ptsFromGeo(geo, mode);
       return await editLock({
         src, rot: effRotate(), mode, pts: pts || defaultPts(mode),
-        title: fresh ? "New area: adjust and lock" : undefined,
-        note: "Every photo will use this area until you unlock it.",
+        title: lock ? "Locked area — adjust it, or 🎯 New area" : "Fix the area, then 🔒 Lock",
+        note: "Every photo will use this area until you change or unlock it.",
         hiRes: sharpPicture,
         detect: detectOnce,
         refresh: async () => ({ src: livePicture() }),
+        unlock: !!lock,
       });
     } finally { editing = null; stillSince = 0; }
   }
@@ -1271,7 +1292,23 @@ async function viewScan(bookId, pcCode = null) {
       beep();
       try { navigator.vibrate?.(60); } catch {}
       $("#lastimg").src = preview;
-      const ps = await DB.addCapture(bookId, blob, { rotate: effRotate(), mode, filter: book.filter || "magic", lock: lock ? { mode: lock.mode, pts: lock.pts, ...(lock.plain ? { plain: true } : {}) } : null });
+      const ps = await DB.addCapture(bookId, blob, { rotate: effRotate(), mode, filter: book.filter || "magic", lock: lock ? { mode: lock.mode, pts: lock.pts, ...(lock.plain ? { plain: true } : {}) } : null,
+        orders: special ? takeOrders(special.slot, mode === "spread" ? 2 : 1) : null });
+      if (special) {
+        special.added.push(...ps.map((p) => p.id));
+        kickQueue();
+        if (special.kind === "retake") {
+          await DB.deletePages([special.pageId]);
+          toast(`Page ${special.num} replaced ✓`);
+          go("#/page/" + ps[0].id);
+          return;
+        }
+        count += ps.length; $("#count").textContent = count;
+        savedAt = performance.now() + 60000;
+        const n = special.added.length;
+        setStatus(`✓ ${n} page${n > 1 ? "s" : ""} added after page ${special.num} — take more, or tap Done`);
+        return;
+      }
       count += ps.length;
       $("#count").textContent = count;
       lastShotSig = sig; turnSeen = false;
@@ -1355,7 +1392,7 @@ async function viewScan(bookId, pcCode = null) {
     if (motion > MOVE_T) { turnFrames++; if (turnFrames >= 2 || motion > MOVE_T * 2.5) turnSeen = true; }
     else turnFrames = 0;
     if (busy || checking) return;
-    if (paused) { setRing(0); return; }
+    if (paused) { setRing(0); if (now - savedAt > 2500) setStatus("⏸ Auto paused — tap ▶ Start to continue"); return; }
     if (state === "idle") {
       setRing(0);
       if (now - savedAt > 2500)
@@ -1388,7 +1425,9 @@ async function viewScan(bookId, pcCode = null) {
       if (now - savedAt > 2500) setStatus(waitMsg || `📸 Photo in ${Math.max(1, Math.ceil(settings.delay - el))}s`);
       return;
     }
-    if (!fresh || !bookRes.ok) {                  // not a clean page (yet): no photo
+    // the photo itself needs a check of a frame from just now (a hand may have crept in)
+    const recent = fresh && bookRes.at >= now - 700;
+    if (!recent || !bookRes.ok) {                 // not a clean page (yet): no photo
       setRing(1);
       if (now - savedAt > 2500) setStatus(waitMsg || "Checking the page…");
       return;
@@ -1472,7 +1511,8 @@ async function viewScan(bookId, pcCode = null) {
     requestAnimationFrame(loop);
     if (now - lastMotion > 100) { lastMotion = now; motionStep(now); }
     // Auto, picture still, waiting for a page check from a still frame: check back to back
-    const waitingCheck = autoOn() && stillSince && !(bookRes && bookRes.at >= stillSince);
+    const waitingCheck = autoOn() && !paused && stillSince && (!(bookRes && bookRes.at >= stillSince)
+      || (now - stillSince >= settings.delay * 1000 - 400 && !(bookRes && bookRes.at >= now - 700)));
     if (now - lastDetect > (waitingCheck ? 60 : prof.detectEvery || 300)) { lastDetect = now; detectStep(); }
   }
 
@@ -1507,9 +1547,13 @@ async function viewScan(bookId, pcCode = null) {
     if (cam.canTorch) $("#torch").classList.remove("hidden");
     getWake();
     DB.askPersist();
-    setStatus(autoOn() ? "Auto: ready — the photo is taken a moment after each page turn" : "Tap the button to shoot");
+    setStatus(special ? (special.kind === "retake" ? `Retake page ${special.num}: point at the page and tap the button`
+      : `Add pages after page ${special.num}: tap the button for each photo`)
+      : autoOn() ? "Auto: ready — the photo is taken a moment after each page turn" : "Tap the button to shoot");
+    if (special) savedAt = performance.now() + 60000;          // keep the instruction on screen
     requestAnimationFrame(loop);
-    if (pcCode === "qr") scanQR();
+    if (special) { /* retake / add page: no PC link */ }
+    else if (pcCode === "qr") scanQR();
     else if (pcCode) connectPc(pcCode);
     else if (settings.lastPc && R.isLocalAddress(settings.lastPc)) {
       note("Looking for your PC…", 4000);
@@ -1543,6 +1587,47 @@ async function viewLink(code) {
 }
 
 // ================================================================ PAGE EDITOR
+// choose photo(s) from the gallery
+function pickImages(multiple) {
+  return new Promise((resolve) => {
+    const inp = document.createElement("input");
+    inp.type = "file"; inp.accept = "image/*"; inp.multiple = !!multiple;
+    inp.onchange = () => resolve([...inp.files]);
+    inp.addEventListener("cancel", () => resolve([]));
+    inp.click();
+  });
+}
+
+// where new pages go: "retake" = in place of page `pageId`, "insert" = right after it (and after
+// pages already added there). Returns {low, high}: new pages get orders between the two.
+async function slotFor(bookId, pageId, kind) {
+  const list = await DB.listPages(bookId);
+  const i = list.findIndex((p) => p.id === pageId);
+  if (i < 0) return null;
+  const o = list[i].order;
+  const next = list[i + 1] ? list[i + 1].order : o + 1;
+  if (kind === "insert") return { low: o, high: next };
+  return { low: i > 0 ? list[i - 1].order : o - 1, high: next };
+}
+// orders for n pages between low and high (moves `slot.low` on, so the next ones come after)
+function takeOrders(slot, n) {
+  const step = (slot.high - slot.low) / (n + 1);
+  const orders = Array.from({ length: n }, (_, k) => slot.low + step * (k + 1));
+  slot.low = orders[n - 1];
+  return orders;
+}
+// add gallery photos at a place in the book (retake: the old page is deleted afterwards)
+async function placeCaptures(bookId, pageId, kind, files, mode, filter) {
+  const slot = await slotFor(bookId, pageId, kind);
+  if (!slot) return [];
+  DB.askPersist();
+  const all = [];
+  for (const f of files) all.push(...(await DB.addCapture(bookId, f, { mode, filter, orders: takeOrders(slot, mode === "spread" ? 2 : 1) })));
+  if (kind === "retake") await DB.deletePages([pageId]);
+  kickQueue();
+  return all;
+}
+
 async function viewPage(pageId) {
   let page = await DB.get("pages", pageId);
   if (!page) return go("#/");
@@ -1554,11 +1639,16 @@ async function viewPage(pageId) {
     <header class="bar">
       <a class="icon" href="#/book/${bookId}" aria-label="Back">‹</a>
       <div class="title" id="ptitle"></div>
-      <button class="icon danger" id="del" aria-label="Delete page">🗑</button>
+      <a class="icon" href="#/book/${bookId}" aria-label="All pages" title="All pages">▦</a>
     </header>
     <main class="viewer" id="viewer"><img id="img" alt="page"><div class="busy hidden" id="busy"><span class="spin"></span> Processing…</div>
       <div class="busy warn hidden" id="blurry">⚠ Looks blurry — consider rescanning this page</div></main>
     <div class="filters" id="filters">${P.FILTERS.map((f) => `<button class="fbtn" data-f="${f}">${FILTER_NAMES[f]}</button>`).join("")}</div>
+    <div class="pagetools">
+      <button class="btn" id="retake">↶ Retake</button>
+      <button class="btn" id="addpg">＋ Add page</button>
+      <button class="btn danger" id="del">🗑 Delete</button>
+    </div>
     <footer class="actions">
       <button class="act" id="prev"><span>◀</span>Prev</button>
       <button class="act" id="rotate"><span>⟳</span>Rotate</button>
@@ -1582,6 +1672,7 @@ async function viewPage(pageId) {
     if (url) URL.revokeObjectURL(url);
     url = b ? URL.createObjectURL(b) : null;
     $("#img").src = url || "";
+    $("#img").style.visibility = url ? "" : "hidden";      // still processing: no broken-picture icon
   }
   await show();
 
@@ -1619,6 +1710,45 @@ async function viewPage(pageId) {
     list = await DB.listPages(bookId);
     await show();
     toast(`Moved to position ${Math.min(Math.max(k, 1), list.length)}`);
+  };
+  // Retake: a new photo replaces this page (same place in the book)
+  $("#retake").onclick = async () => {
+    const idx = list.findIndex((p) => p.id === page.id);
+    const v = await sheet(`Retake page ${idx + 1}`, [
+      { label: "📷 Take a new photo of this page", value: "cam" },
+      { label: "🖼 Pick a photo from the gallery", value: "gal" },
+    ]);
+    if (v === "cam") go(`#/scan/${bookId}/retake:${page.id}`);
+    if (v === "gal") {
+      const [f] = await pickImages(false);
+      if (!f) return;
+      const book = await DB.get("books", bookId);
+      const ps = await placeCaptures(bookId, page.id, "retake", [f], "single", book.filter || "magic");
+      toast(`Page ${idx + 1} replaced`);
+      go("#/page/" + ps[0].id);
+    }
+  };
+  // Add: new page(s) right after this one
+  $("#addpg").onclick = async () => {
+    const idx = list.findIndex((p) => p.id === page.id);
+    const v = await sheet(`Add page(s) after page ${idx + 1}`, [
+      { label: "📷 Take photo(s)", value: "cam" },
+      { label: "🖼 From the gallery", value: "gal" },
+    ]);
+    if (v === "cam") go(`#/scan/${bookId}/insert:${page.id}`);
+    if (v === "gal") {
+      const files = await pickImages(true);
+      if (!files.length) return;
+      const book = await DB.get("books", bookId);
+      const mode = book.kind === "doc" ? "single" : await sheet("Each photo shows…", [
+        { label: "📖 Two pages (split left / right)", value: "spread", active: book.mode === "spread" },
+        { label: "📄 One page", value: "single", active: book.mode !== "spread" },
+      ]);
+      if (!mode) return;
+      const ps = await placeCaptures(bookId, page.id, "insert", files, mode, book.filter || "magic");
+      toast(`${ps.length} page(s) added after page ${idx + 1}`);
+      go("#/page/" + ps[0].id);
+    }
   };
   $("#del").onclick = async () => {
     if (!(await confirmBox("Delete this page?"))) return;

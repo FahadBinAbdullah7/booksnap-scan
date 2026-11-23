@@ -24,30 +24,20 @@ export function setupControls(send, getState, getFrame) {
   pick("segOrient", (v) => send({ t: "orient", v }));
   pick("segAuto", (v) => send({ t: "auto", on: v === "auto" }));
   if ($("rotbtn")) $("rotbtn").onclick = () => send({ t: "rotate" });
+  // Lock: click → fix the area → 🔒 Lock. Click again to change it (🎯 New area) or unlock.
   $("lockbtn").onclick = async () => {
     const st = getState();
-    let fresh = false;
-    if (st.lock) {
-      const choice = await chooser("Locked page area", [
-        ["edit", "✏️ Adjust the locked area (zoom in for exact corners)"],
-        ["new", "🎯 New area — find the page again and lock it"],
-        ["unlock", "🔓 Unlock (automatic detection)"]]);
-      if (choice === "unlock") return send({ t: "unlock" });
-      if (choice !== "edit" && choice !== "new") return;
-      fresh = choice === "new";
-    }
     const f = await getFrame();
     if (!f || !f.bmp) return alertBox("No camera picture from the phone yet.");
     send({ t: "lock-editing", on: true });              // Auto on the phone waits meanwhile
     let pts = null;
     try {
-      let start = !fresh && st.lock ? st.lock.pts : null;
-      if (!start && !st.lock) start = ptsFromGeo(f.geo, st.mode);
+      let start = st.lock ? st.lock.pts : ptsFromGeo(f.geo, st.mode);
       if (!start) start = await request(send, { t: "detect-req" }, "detected", 8000).then((r) => r && r.pts).catch(() => null);
       pts = await editLock({
         src: f.bmp, rot: st.rotate || 0, mode: st.mode, pts: start || defaultPts(st.mode),
-        title: fresh ? "New area: adjust and lock" : undefined,
-        note: "The phone uses exactly this area for every photo until you unlock it. Keys: + / − zoom, Tab next corner, arrows nudge, Enter lock.",
+        title: st.lock ? "Locked area — adjust it, or 🎯 New area" : "Fix the area, then 🔒 Lock",
+        note: "The phone uses exactly this area for every photo until you change or unlock it. Keys: + / − zoom, Tab next corner, arrows nudge, Enter lock.",
         hiRes: async () => {
           const r = await request(send, { t: "lock-photo-req" }, "lock-photo", 20000);
           if (!r || typeof r.data !== "string" || !r.data.startsWith("data:image/jpeg;base64,")) return null;
@@ -55,9 +45,11 @@ export function setupControls(send, getState, getFrame) {
         },
         detect: async () => (await request(send, { t: "detect-req" }, "detected", 8000))?.pts || null,
         refresh: async () => { const g = await getFrame(); return g && g.bmp ? { src: g.bmp } : null; },
+        unlock: !!st.lock,
       });
     } finally {
-      if (pts) send({ t: "lock", pts, fresh });
+      if (pts === "unlock") send({ t: "unlock" });
+      else if (pts) send({ t: "lock", pts, fresh: !!st.lock });
       else send({ t: "lock-editing", on: false });
     }
   };
@@ -114,13 +106,6 @@ function modal(html) {
   w.innerHTML = `<div class="modal">${html}</div>`;
   document.getElementById("modal-root").appendChild(w);
   return { el: w, close: () => w.remove() };
-}
-function chooser(title, options) {
-  return new Promise((res) => {
-    const m = modal(`<h3>${esc(title)}</h3><div class="sheet">${options.map(([v, l]) => `<button class="sheet-btn" data-v="${v}">${l}</button>`).join("")}
-      <button class="sheet-btn cancel" data-v="">Cancel</button></div>`);
-    m.el.onclick = (e) => { const b = e.target.closest("[data-v]"); if (!b && e.target !== m.el) return; m.close(); res(b ? b.dataset.v : null); };
-  });
 }
 function alertBox(text) {
   const m = modal(`<p>${esc(text)}</p><div class="row end"><button class="btn primary" id="ok">OK</button></div>`);

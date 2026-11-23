@@ -124,7 +124,8 @@ export async function deleteBook(bookId) {
 
 // ---------------------------------------------------------------- captures & pages
 // One photo -> 1 page (single) or 2 pages (spread: left first, then right).
-export async function addCapture(bookId, blob, { rotate = 0, mode = "spread", filter = "magic", lock = null } = {}) {
+// `orders`: put the new page(s) at these positions (retake / add a page in between) instead of at the end
+export async function addCapture(bookId, blob, { rotate = 0, mode = "spread", filter = "magic", lock = null, orders = null } = {}) {
   blob = await pack(blob);
   return run(["books", "captures", "pages"], "readwrite", (t) => new Promise((res, rej) => {
     const bs = t.objectStore("books");
@@ -136,8 +137,8 @@ export async function addCapture(bookId, blob, { rotate = 0, mode = "spread", fi
       const cap = { id: uid(), bookId, blob, rotate, mode, lock, created: Date.now() };
       t.objectStore("captures").put(cap);
       const sides = mode === "spread" ? ["L", "R"] : ["S"];
-      const pages = sides.map((side) => ({
-        id: uid(), bookId, captureId: cap.id, side, order: b.nextOrder++,
+      const pages = sides.map((side, i) => ({
+        id: uid(), bookId, captureId: cap.id, side, order: orders && orders[i] != null ? orders[i] : b.nextOrder++,
         filter, rot: 0, crop: null, status: "pending", rev: 1, created: Date.now(),
       }));
       for (const p of pages) t.objectStore("pages").put(p);
