@@ -200,35 +200,46 @@ async function viewLibrary() {
   const books = await DB.listBooks();
   const counts = await Promise.all(books.map((b) => DB.countPages(b.id)));
   const st = await DB.storageInfo();
+  // two tabs: books (book scan) and regular scans
+  const tab = settings.homeTab === "doc" ? "doc" : "book";
+  const all = books.map((b, i) => ({ b, n: counts[i] }));
+  const shown = all.filter(({ b }) => (b.kind === "doc") === (tab === "doc"));
+  const nDoc = all.filter(({ b }) => b.kind === "doc").length, nBook = all.length - nDoc;
   app.innerHTML = `
     <header class="bar"><div class="brand"><span class="logo">📚</span> BookSnap</div><div style="flex:1"></div>
       <button class="icon" id="help" aria-label="How to use">?</button></header>
     <main class="lib">
-      <div class="newrow">
-        <button class="btn primary big" id="new">📖 Book scan</button>
-        <button class="btn big" id="newdoc">📄 Regular scan</button>
+      <div class="tabs" role="tablist">
+        <button class="tab${tab === "book" ? " active" : ""}" data-tab="book" role="tab">📖 Book scan <span class="tabn">${nBook}</span></button>
+        <button class="tab${tab === "doc" ? " active" : ""}" data-tab="doc" role="tab">📄 Regular scan <span class="tabn">${nDoc}</span></button>
       </div>
-      <p class="muted small newhint">Book scan: finds the pages, splits 2-page spreads, Auto mode. Regular scan: plain photos — crop and filter afterwards.</p>
-      ${books.length ? `<div class="books">${books.map((b, i) => `
+      ${tab === "book"
+        ? `<button class="btn primary big" id="new">＋ New book</button>`
+        : `<button class="btn primary big" id="newdoc">＋ New scan</button>
+           <p class="muted small newhint">Plain photos, no page detection — crop, rotate and filter each page afterwards.</p>`}
+      ${shown.length ? `<div class="books">${shown.map(({ b, n }) => `
         <a class="book" href="#/book/${b.id}">
           <div class="cover" data-cover="${b.id}"></div>
-          <div class="info"><div class="name">${b.kind === "doc" ? "📄 " : ""}${esc(b.name)}</div>
-          <div class="meta">${counts[i]} pages · ${fmtDate(b.updated)}</div></div>
+          <div class="info"><div class="name">${esc(b.name)}</div>
+          <div class="meta">${n} pages · ${fmtDate(b.updated)}</div></div>
           <span class="chev">›</span>
         </a>`).join("")}</div>`
-      : `<div class="empty"><div class="big-emoji">📖</div><p>No books yet.</p><p class="muted">Tap <b>Book scan</b> for a book, or <b>Regular scan</b> for documents and single sheets.</p></div>`}
+      : tab === "book"
+        ? `<div class="empty"><div class="big-emoji">📖</div><p>No books yet.</p><p class="muted">Tap <b>New book</b>, put your book under the phone and start scanning.</p></div>`
+        : `<div class="empty"><div class="big-emoji">📄</div><p>No regular scans yet.</p><p class="muted">Tap <b>New scan</b> to photograph documents, receipts or single sheets.</p></div>`}
       <p class="storage">${st.quota ? `Stored on this device: ${fmtBytes(st.usage)} of ${fmtBytes(st.quota)} available` : ""}
       ${st.persisted ? " · protected ✓" : ""}</p>
       ${N.isAndroid() ? `<p class="storage"><span id="appver"></span> · <a href="#" id="chkupd">Check for updates</a></p>` : ""}
     </main>`;
-  app.querySelector("#new").onclick = async () => {
+  app.querySelectorAll(".tab").forEach((t) => (t.onclick = () => { settings.homeTab = t.dataset.tab; saveSettings(); viewLibrary(); }));
+  if (app.querySelector("#new")) app.querySelector("#new").onclick = async () => {
     const name = await ask("Book name", "Book " + new Date().toLocaleDateString(), "Create");
     if (!name) return;
     DB.askPersist();
     const b = await DB.createBook(name);
     go("#/scan/" + b.id);
   };
-  app.querySelector("#newdoc").onclick = async () => {
+  if (app.querySelector("#newdoc")) app.querySelector("#newdoc").onclick = async () => {
     const name = await ask("Scan name", "Scan " + new Date().toLocaleString(), "Create");
     if (!name) return;
     DB.askPersist();
@@ -250,7 +261,7 @@ async function viewLibrary() {
     app.querySelector("#chkupd").onclick = (e) => { e.preventDefault(); toast("Checking…"); Upd.banner(lib, { force: true, toast }).catch(() => {}); };
   }
   const urls = [];
-  for (const b of books) {
+  for (const { b } of shown) {
     const ps = await DB.listPages(b.id);
     const first = ps.find((p) => p.status === "done");
     if (!first) continue;

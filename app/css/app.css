@@ -216,7 +216,9 @@ html:has(body.native-cam), body.native-cam, body.native-cam #app, body.native-ca
 .update-banner .ub-status:empty { display: none; }
 @media (prefers-color-scheme: dark) { .update-banner { background: #052e1f; border-color: #10b981; color: #d1fae5; } .update-banner .ub-notes { color: #a7f3d0; } }
 
-/* ---- home: book scan / regular scan */
-.newrow { display: flex; gap: 10px; }
-.newrow .btn { flex: 1; }
+/* ---- home: tabs for book scans / regular scans */
+.tabs { display: flex; gap: 6px; padding: 4px; margin: 0 0 14px; border-radius: 14px; background: rgba(100,116,139,.14); }
+.tab { flex: 1; border: 0; border-radius: 10px; padding: 11px 8px; font: inherit; font-weight: 600; font-size: 15px; background: transparent; color: inherit; cursor: pointer; }
+.tab.active { background: var(--card, #fff); box-shadow: 0 1px 4px rgba(0,0,0,.12); }
+.tab .tabn { display: inline-block; min-width: 20px; padding: 0 6px; margin-left: 4px; border-radius: 999px; font-size: 12px; line-height: 20px; background: rgba(100,116,139,.2); }
 .newhint { margin: 8px 2px 14px; }
