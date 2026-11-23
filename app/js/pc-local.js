@@ -199,6 +199,7 @@ export async function start(session) {
   }
   async function setThumb(order, blob, blurry) {
     const f = figFor(order);
+    f._full = blob;                        // click the thumbnail to zoom the page
     f.classList.toggle("blurry", !!blurry);
     try {
       const bmp = await createImageBitmap(blob, { resizeWidth: 240 });

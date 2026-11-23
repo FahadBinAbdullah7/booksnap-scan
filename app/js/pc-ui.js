@@ -2,6 +2,7 @@
 // live view, and the lock-area editor (drag corners + fold on the big screen).
 import * as P from "./imgproc.js";
 import { editLock, ptsFromGeo, defaultPts } from "./lockedit.js";
+import { attachZoom, zoomButtons, zoomViewer } from "./zoomview.js";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -24,6 +25,7 @@ export function setupControls(send, getState, getFrame) {
   pick("segOrient", (v) => send({ t: "orient", v }));
   pick("segAuto", (v) => send({ t: "auto", on: v === "auto" }));
   if ($("rotbtn")) $("rotbtn").onclick = () => send({ t: "rotate" });
+  setupZoom(send);
   // Lock: click → fix the area → 🔒 Lock. Click again to change it (🎯 New area) or unlock.
   $("lockbtn").onclick = async () => {
     const st = getState();
@@ -172,3 +174,42 @@ export function rotateLive(rotate) {
   }
 }
 addEventListener("resize", () => rotateLive(liveRot));
+
+// Zoom: the live picture (wheel / pinch / double-click / − + buttons), a sharp full-size photo
+// from the phone (🔍 Sharp photo), and the received pages (click a thumbnail).
+let liveZoom = null;
+function setupZoom(send) {
+  const live = $("live");
+  if (live && !$("livez")) {
+    const wrap = document.createElement("div");
+    wrap.id = "livez";
+    for (const id of ["video", "liveimg", "overlay"]) { const el = $(id); if (el) wrap.appendChild(el); }
+    live.prepend(wrap);
+    let upd = () => {};
+    liveZoom = attachZoom(live, wrap, { onChange: (sc) => upd(sc) });
+    upd = zoomButtons(live, liveZoom, `<button type="button" class="zsharp" id="zsharp" title="A sharp full-size photo from the phone, to check the page up close">🔍 Sharp photo</button>`);
+    $("zsharp").onclick = async (e) => {
+      e.stopPropagation();
+      const b = $("zsharp"); b.disabled = true; b.textContent = "Getting photo…";
+      try {
+        const r = await request(send, { t: "lock-photo-req" }, "lock-photo", 20000).catch(() => null);
+        if (!r || typeof r.data !== "string" || !r.data.startsWith("data:image/jpeg;base64,")) return alertBox("No photo from the phone — is it connected?");
+        const bmp = await createImageBitmap(await (await fetch(r.data)).blob());
+        const c = rotatedCanvas(bmp, liveRot); bmp.close();
+        await zoomViewer(c, "Sharp photo from the phone (not saved)");
+      } finally { b.disabled = false; b.textContent = "🔍 Sharp photo"; }
+    };
+  }
+  const th = $("thumbs");
+  if (th) th.addEventListener("click", (e) => {
+    const f = e.target.closest("figure");
+    if (f && f._full) zoomViewer(f._full, "Page " + Math.round(+f.dataset.o));
+  });
+}
+function rotatedCanvas(src, rot) {
+  const c = document.createElement("canvas");
+  c.width = rot % 180 ? src.height : src.width; c.height = rot % 180 ? src.width : src.height;
+  const g = c.getContext("2d");
+  g.translate(c.width / 2, c.height / 2); g.rotate((rot * Math.PI) / 180); g.drawImage(src, -src.width / 2, -src.height / 2);
+  return c;
+}

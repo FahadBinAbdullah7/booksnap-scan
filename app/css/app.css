@@ -230,3 +230,24 @@ html:has(body.native-cam), body.native-cam, body.native-cam #app, body.native-ca
 /* ---- home: version + update button at the top (Android app) */
 .updrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 12px; }
 .updrow .btn.small { padding: 7px 12px; font-size: 14px; }
+
+/* ---------- zoom (phone + PC) */
+.zoombar { position: absolute; right: 10px; bottom: 10px; z-index: 4; display: flex; align-items: center; gap: 2px;
+  background: rgba(15,23,42,.78); color: #fff; border-radius: 99px; padding: 3px; }
+.zoombar button { border: 0; background: none; color: #fff; font-size: 18px; font-weight: 700; min-width: 36px; height: 34px; border-radius: 99px; cursor: pointer; }
+.zoombar button:active, .zoombar button:hover { background: rgba(255,255,255,.15); }
+.zoombar .zv { font-size: 12px; min-width: 40px; text-align: center; font-variant-numeric: tabular-nums; }
+.zoombar .zsharp { font-size: 13px; padding: 0 10px; white-space: nowrap; }
+.zoomview { position: fixed; inset: 0; z-index: 60; background: #0b1220; color: #fff; display: flex; flex-direction: column; }
+.zv-head { display: flex; align-items: center; gap: 8px; padding: calc(8px + var(--safe-t, 0px)) 10px 8px; }
+.zv-title { flex: 1; font-weight: 700; }
+.zv-close { border: 0; background: rgba(255,255,255,.12); color: #fff; font-size: 18px; width: 40px; height: 40px; border-radius: 99px; cursor: pointer; }
+.zv-stage { position: relative; flex: 1; overflow: hidden; touch-action: none; cursor: zoom-in; }
+.zv-stage.zoomed { cursor: grab; }
+.zv-pic { position: absolute; inset: 0; display: grid; place-items: center; padding: 8px; }
+.zv-pic img, .zv-pic canvas { max-width: 100%; max-height: 100%; object-fit: contain; background: #fff; }
+.zv-hint { text-align: center; font-size: 12px; color: #94a3b8; padding: 6px 10px calc(8px + var(--safe-b, 0px)); }
+.viewer { touch-action: pan-y; }
+.viewer.zoomed { touch-action: none; }
+.viewer .zpic { position: absolute; inset: 0; display: grid; place-items: center; padding: 12px; }
+.viewer .zpic img { max-width: 100%; max-height: 100%; object-fit: contain; background: #fff; box-shadow: 0 4px 24px rgba(0,0,0,.18); border-radius: 4px; }

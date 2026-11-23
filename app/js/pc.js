@@ -42,16 +42,24 @@ function showQR() {
   } catch (e) { $("qr").textContent = "QR unavailable — type the code"; }
 }
 
+// The code stays the same (saved in this browser), so the phone can reconnect by itself after
+// a reload. Right after a reload the link service may still hold the code for a moment:
+// try the same code again for up to a minute before making a new one.
+let takenTries = 0;
 function startPeer(fresh = false) {
   try { peer && peer.destroy(); } catch {}
+  if (fresh) takenTries = 0;
   code = (!fresh && getSavedCode()) || newCode();
   saveCode(code);
   showQR();
   setStatus("Starting…");
   peer = new Peer(PREFIX + code);
-  peer.on("open", () => setStatus(conn && conn.open ? "Phone connected" : "Waiting for phone…", conn && conn.open ? "ok" : ""));
+  peer.on("open", () => { takenTries = 0; setStatus(conn && conn.open ? "Phone connected" : "Waiting for phone…", conn && conn.open ? "ok" : ""); });
   peer.on("error", (e) => {
-    if (e.type === "unavailable-id") return startPeer(true);          // code taken: make a new one
+    if (e.type === "unavailable-id") {
+      if (++takenTries <= 12) { setStatus("Getting your code back…"); setTimeout(() => startPeer(false), 5000); return; }
+      return startPeer(true);                                          // really taken: make a new one
+    }
     if (e.type === "network" || e.type === "server-error" || e.type === "socket-error") setStatus("No connection to link service — retrying", "bad");
     else console.warn("peer error", e.type, e);
   });
@@ -311,6 +319,7 @@ function figFor(order) {
 function addPendingThumb(order) { const f = figFor(order); if (!f.querySelector("img").src) f.classList.add("pending"); }
 async function setThumb(order, blob, blurry = false) {
   const f = figFor(order);
+  f._full = blob;                        // click the thumbnail to zoom the page
   f.classList.toggle("blurry", blurry);
   try {
     const bmp = await createImageBitmap(blob, { resizeWidth: 240 });

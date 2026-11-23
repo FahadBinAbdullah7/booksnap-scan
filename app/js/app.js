@@ -10,6 +10,7 @@ import * as Dev from "./device.js";
 import * as PS from "./pagesig.js";
 import * as Upd from "./updater.js";
 import { editLock, ptsFromGeo, defaultPts } from "./lockedit.js";
+import { attachZoom, zoomButtons, zoomViewer } from "./zoomview.js";
 
 const app = document.getElementById("app");
 const modalRoot = document.getElementById("modal-root");
@@ -452,7 +453,7 @@ async function viewBook(bookId) {
   app.querySelector("#title").onclick = rename;
   app.querySelector("#menu").onclick = async () => {
     const v = await sheet(book.name, [
-      { label: "💻 Connect to PC (scan its QR code)", value: "pc" },
+      { label: "💻 Connect to PC (QR code or type the code)", value: "pc" },
       { label: "✓ Select pages", value: "select" },
       { label: "🎨 Filter for all pages", value: "filter" },
       { label: "🖼 Save page images (0001.jpg …)", value: "images" },
@@ -720,6 +721,7 @@ async function viewScan(bookId, pcCode = null) {
         <button class="chip" id="delay"></button>
         <button class="chip hidden" id="pause">⏸ Pause</button>
         <button class="chip" id="rot" title="Fix sideways photos"></button>
+        <button class="chip" id="zoom" title="Look at a sharp photo up close">🔍 Zoom</button>
         <button class="chip hidden" id="torch">🔦</button>
         <button class="chip hidden" id="undo">↶ Retake</button>
       </div>
@@ -921,8 +923,24 @@ async function viewScan(bookId, pcCode = null) {
   const setTorch = async (v) => { torchOn = v; await cam.torch(torchOn); $("#torch").classList.toggle("on", torchOn); };
   $("#torch").onclick = () => setTorch(!torchOn);
   $("#shutter").onclick = () => shoot();
-  $("#pc").onclick = () => (remote() ? disconnectPc(true) : scanQR());
+  $("#pc").onclick = () => (remote() ? disconnectPc(true) : connectDialog());
   $("#undo").onclick = () => undoLast();
+  // 🔍 Zoom: a sharp photo from the camera, to check the page up close before shooting (not saved)
+  $("#zoom").onclick = async () => {
+    if (busy || editing) return;
+    editing = "view";
+    try {
+      setStatus("Taking a sharp picture to zoom…");
+      const bmp = await sharpPicture();
+      if (!bmp) { toast("Camera not ready yet"); return; }
+      const c = document.createElement("canvas"), r = effRotate();
+      c.width = r % 180 ? bmp.height : bmp.width; c.height = r % 180 ? bmp.width : bmp.height;
+      const g = c.getContext("2d");
+      g.translate(c.width / 2, c.height / 2); g.rotate((r * Math.PI) / 180); g.drawImage(bmp, -bmp.width / 2, -bmp.height / 2);
+      bmp.close();
+      await zoomViewer(c, "Zoom — this picture is not saved");
+    } finally { editing = null; stillSince = 0; }
+  };
   // Lock: tap → fix the area → 🔒 Lock. Tap again to change it (🎯 New area finds the page again)
   // or to unlock — all inside the same screen.
   $("#lockbtn").onclick = async () => {
@@ -1147,19 +1165,28 @@ async function viewScan(bookId, pcCode = null) {
     }
   });
 
+  // 💻 PC: connect to the saved PC in one tap, scan its QR code, or type its code
+  const showCode = (c) => (R.isLocalAddress(c) ? c : R.normCode(c).replace(/^(...)(...)$/, "$1 $2"));
   function connectDialog(typeOnly = false) {
     const hasQR = !typeOnly && "BarcodeDetector" in window;
+    const saved = settings.lastPc;
     const m = modal(`<h3>💻 Connect to PC</h3>
-      <p class="muted">${N.isNative() ? "On the computer, start <b>BookSnap PC</b> (Mac: double-click <b>Start BookSnap PC</b>). Phone and computer must be on the same Wi-Fi." : `On the computer open <b>${esc(new URL("pc.html", location.href).href)}</b>`}</p>
-      ${hasQR ? '<button class="btn primary" id="qrscan" style="width:100%;margin-bottom:12px">📷 Scan the QR code on the PC</button><p class="muted" style="text-align:center">or type what the PC shows</p>' : '<p>Type what the PC shows:</p>'}
-      <input class="input" id="pcc" placeholder="192.168.0.103:8765/AB12CD" maxlength="60" autocapitalize="characters" autocomplete="off" inputmode="url" style="font-size:18px;text-align:center">
+      <p class="muted">${N.isNative() ? "On the computer open <b>booksnap-scanner.vercel.app/pc</b> (or start <b>BookSnap PC</b> for Wi-Fi)." : `On the computer open <b>${esc(new URL("pc.html", location.href).href)}</b>`}</p>
+      ${saved ? `<button class="btn primary" id="again" style="width:100%;margin-bottom:10px">⚡ Connect to my PC · ${esc(showCode(saved))}</button>` : ""}
+      ${hasQR ? `<button class="btn${saved ? "" : " primary"}" id="qrscan" style="width:100%;margin-bottom:12px">📷 Scan the QR code on the PC</button>` : ""}
+      <p class="muted" style="text-align:center;margin:4px 0">${saved || hasQR ? "or type the code shown on the PC" : "Type the code shown on the PC"}</p>
+      <input class="input" id="pcc" placeholder="ABC 123" maxlength="60" autocapitalize="characters" autocomplete="off" spellcheck="false" style="font-size:22px;text-align:center;letter-spacing:2px">
+      <label class="check" style="margin-top:10px"><input type="checkbox" id="pcauto" ${settings.pcAuto !== false ? "checked" : ""}> Connect by itself when I open the scanner</label>
       <div class="row end"><button class="btn" id="c">Cancel</button><button class="btn primary" id="o">Connect</button></div>`);
     const inp = m.el.querySelector("#pcc");
-    if (settings.lastPc) inp.value = settings.lastPc;
-    m.el.querySelector("#c").onclick = () => m.close();
-    m.el.querySelector("#o").onclick = () => { m.close(); connectPc(inp.value); };
-    inp.onkeydown = (e) => { if (e.key === "Enter") { m.close(); connectPc(inp.value); } };
-    if (hasQR) m.el.querySelector("#qrscan").onclick = () => { m.close(); scanQR(); };
+    const keepAuto = () => { const v = m.el.querySelector("#pcauto").checked; if (settings.pcAuto !== v) { settings.pcAuto = v; saveSettings(); } };
+    const goCode = (c) => { keepAuto(); m.close(); connectPc(c); };
+    m.el.querySelector("#c").onclick = () => { keepAuto(); m.close(); };
+    m.el.querySelector("#o").onclick = () => (inp.value.trim() ? goCode(inp.value) : toast("Type the code shown on the PC"));
+    inp.onkeydown = (e) => { if (e.key === "Enter" && inp.value.trim()) goCode(inp.value); };
+    if (saved) m.el.querySelector("#again").onclick = () => goCode(saved);
+    if (hasQR) m.el.querySelector("#qrscan").onclick = () => { keepAuto(); m.close(); scanQR(); };
+    if (!saved && !hasQR) setTimeout(() => inp.focus(), 50);
   }
   // full-screen QR scanner: point the phone at the QR code on the PC page
   let qrScanning = false;
@@ -1367,7 +1394,7 @@ async function viewScan(bookId, pcCode = null) {
     if (editing === "pc" && !remote()) editing = null;          // PC went away while adjusting
     if (editing) {
       stillSince = 0; setRing(0);
-      setStatus(editing === "pc" ? "Adjusting the page area on the PC…" : "Adjusting the page area…");
+      setStatus(editing === "pc" ? "Adjusting the page area on the PC…" : editing === "view" ? "🔍 Zoom view open — Auto waits" : "Adjusting the page area…");
       return;
     }
     // Manual mode: nothing to track (keeps the phone fast)
@@ -1553,10 +1580,10 @@ async function viewScan(bookId, pcCode = null) {
     if (special) savedAt = performance.now() + 60000;          // keep the instruction on screen
     requestAnimationFrame(loop);
     if (special) { /* retake / add page: no PC link */ }
-    else if (pcCode === "qr") scanQR();
+    else if (pcCode === "qr") connectDialog();
     else if (pcCode) connectPc(pcCode);
-    else if (settings.lastPc && R.isLocalAddress(settings.lastPc)) {
-      note("Looking for your PC…", 4000);
+    else if (settings.lastPc && settings.pcAuto !== false && !isDoc) {    // reconnect to the saved PC by itself
+      note("Connecting to your PC…", 4000);
       connectPc(settings.lastPc, true).then(() => { if (!remote()) note("PC not found — tap 💻 PC to connect", 4000); });
     }
   } catch (e) {
@@ -1641,7 +1668,7 @@ async function viewPage(pageId) {
       <div class="title" id="ptitle"></div>
       <a class="icon" href="#/book/${bookId}" aria-label="All pages" title="All pages">▦</a>
     </header>
-    <main class="viewer" id="viewer"><img id="img" alt="page"><div class="busy hidden" id="busy"><span class="spin"></span> Processing…</div>
+    <main class="viewer" id="viewer"><div class="zpic"><img id="img" alt="page"></div><div class="busy hidden" id="busy"><span class="spin"></span> Processing…</div>
       <div class="busy warn hidden" id="blurry">⚠ Looks blurry — consider rescanning this page</div></main>
     <div class="filters" id="filters">${P.FILTERS.map((f) => `<button class="fbtn" data-f="${f}">${FILTER_NAMES[f]}</button>`).join("")}</div>
     <div class="pagetools">
@@ -1674,6 +1701,10 @@ async function viewPage(pageId) {
     $("#img").src = url || "";
     $("#img").style.visibility = url ? "" : "hidden";      // still processing: no broken-picture icon
   }
+  // zoom the page: pinch, double-tap, or the − / + buttons
+  let zUpd = () => {};
+  const zoom = attachZoom($("#viewer"), $("#viewer .zpic"), { onChange: (sc) => zUpd(sc) });
+  zUpd = zoomButtons($("#viewer"), zoom);
   await show();
 
   const edit = async (changes) => {
@@ -1762,7 +1793,7 @@ async function viewPage(pageId) {
   // swipe left/right
   let sx = null;
   const v = $("#viewer");
-  v.addEventListener("touchstart", (e) => { sx = e.touches[0].clientX; }, { passive: true });
+  v.addEventListener("touchstart", (e) => { sx = e.touches.length === 1 && zoom.scale === 1 ? e.touches[0].clientX : null; }, { passive: true });
   v.addEventListener("touchend", (e) => {
     if (sx == null) return;
     const dx = e.changedTouches[0].clientX - sx;

@@ -60,3 +60,9 @@ kbd.dark { background: var(--line); color: var(--text); }
 .phone-status .ps-ring circle { fill: none; stroke-width: 4; }
 .phone-status .ps-ring .bg { stroke: rgba(255,255,255,.25); }
 .phone-status .ps-ring .fg { stroke: #22c55e; stroke-dasharray: 94.25; stroke-dashoffset: 94.25; transition: stroke-dashoffset .15s linear; }
+/* zoomable live picture */
+#livez { position: absolute; inset: 0; }
+.live { touch-action: none; cursor: zoom-in; }
+.live.zoomed { cursor: grab; }
+.live .zoombar { z-index: 5; }
+.thumbs figure { cursor: zoom-in; }
