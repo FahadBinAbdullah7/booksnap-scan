@@ -2,14 +2,14 @@
 // processing sizes (pages stay sharp enough to read and print), and we keep an
 // eye on free storage so a long scan never fills the phone.
 import { registerPlugin } from "../vendor/capacitor-core.js";
-import { isNative } from "./native.js";
+import { isAndroid } from "./native.js";
 
 const NC = registerPlugin("NativeCamera");
 let cached = null;
 
 export async function info() {
   let totalMem = 0, lowRam = false, freeDisk = null;
-  if (isNative()) {
+  if (isAndroid()) {
     try { const r = await NC.deviceInfo(); totalMem = r.totalMem || 0; lowRam = !!r.lowRam; freeDisk = r.freeDisk ?? null; } catch {}
   }
   if (!totalMem && navigator.deviceMemory) totalMem = navigator.deviceMemory * 1024 ** 3;

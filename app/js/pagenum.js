@@ -1,6 +1,6 @@
 // Reads the printed page number of a page (English 0-9 or Bangla ০-৯) from its
 // top and bottom margin, fully offline (Tesseract, English + Bangla models).
-import { isNative } from "./native.js";
+import { isAndroid } from "./native.js";
 const BN = "০১২৩৪৫৬৭৮৯";
 let workerP = null;
 
@@ -21,8 +21,8 @@ export function init() {
       workerPath: base + "worker.min.js",
       corePath: base + "core",
       langPath: base + "lang",
-      // the Android build unpacks *.traineddata.gz inside the app; the website serves them packed
-      gzip: !isNative(),
+      // the Android build unpacks *.traineddata.gz inside the app; the website and iPhone app keep them packed
+      gzip: !isAndroid(),
       workerBlobURL: false,
       cacheMethod: "none",
     });

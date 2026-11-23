@@ -2,7 +2,7 @@
 // with the installed version; if it is newer, a banner offers to download and
 // install it. (The website updates itself — nothing to do there.)
 import { registerPlugin } from "../vendor/capacitor-core.js";
-import { isNative } from "./native.js";
+import { isAndroid } from "./native.js";
 
 const U = registerPlugin("Updater");
 export const REPO = "FahadBinAbdullah7/booksnap-scan";
@@ -17,7 +17,7 @@ export function newer(a, b) {
 }
 
 export async function installedVersion() {
-  if (!isNative()) return null;
+  if (!isAndroid()) return null;
   try { return (await U.info()).version; } catch { return null; }
 }
 

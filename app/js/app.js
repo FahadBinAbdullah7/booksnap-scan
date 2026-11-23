@@ -215,7 +215,7 @@ async function viewLibrary() {
       : `<div class="empty"><div class="big-emoji">📖</div><p>No books yet.</p><p class="muted">Tap <b>New book</b>, put your book under the phone and start scanning.</p></div>`}
       <p class="storage">${st.quota ? `Stored on this device: ${fmtBytes(st.usage)} of ${fmtBytes(st.quota)} available` : ""}
       ${st.persisted ? " · protected ✓" : ""}</p>
-      ${N.isNative() ? `<p class="storage"><span id="appver"></span> · <a href="#" id="chkupd">Check for updates</a></p>` : ""}
+      ${N.isAndroid() ? `<p class="storage"><span id="appver"></span> · <a href="#" id="chkupd">Check for updates</a></p>` : ""}
     </main>`;
   app.querySelector("#new").onclick = async () => {
     const name = await ask("Book name", "Book " + new Date().toLocaleDateString(), "Create");
@@ -227,7 +227,7 @@ async function viewLibrary() {
   app.querySelector("#help").onclick = showHelp;
   if (!settings.seenHelp) { settings.seenHelp = true; saveSettings(); showHelp(); }
   // Android app: offer new versions from GitHub
-  if (N.isNative()) {
+  if (N.isAndroid()) {
     const lib = app.querySelector("main.lib");
     Upd.installedVersion().then((v) => {
       const e = app.querySelector("#appver"); if (e && v) e.textContent = "BookSnap " + v;
@@ -570,7 +570,7 @@ async function exportPdf(book) {
   m.close();
   const list = results.map((r) => `<li>${esc(r.name)} <span class="muted">· ${r.pages} pages · ${fmtBytes(r.size)}</span>${r.url ? ` <a href="${r.url}" download="${esc(r.name)}">⬇ Save</a>` : ""}</li>`).join("");
   const r = modal(`<h3>PDF ready ✓</h3><ul class="pdf-list">${list}</ul>
-    ${N.isNative() ? `<p class="muted small">Saved in <b>Documents/BookSnap/${esc(base)}/</b> — open the Files app → Documents → BookSnap.</p>` : ""}
+    ${N.isAndroid() ? `<p class="muted small">Saved in <b>Documents/BookSnap/${esc(base)}/</b> — open the Files app → Documents → BookSnap.</p>` : N.isIOS() ? `<p class="muted small">Saved in the <b>Files</b> app → <b>On My iPhone → BookSnap → BookSnap/${esc(base)}</b>.</p>` : ""}
     <div class="col">${N.isNative() || (navigator.canShare && navigator.canShare({ files: [results[0].file] })) ? '<button class="btn primary" id="sh">↗ Share / Save to Drive</button>' : ""}
     <button class="btn" id="cl">Close</button></div>`);
   r.el.querySelector("#cl").onclick = () => { r.close(); results.forEach((x) => x.url && setTimeout(() => URL.revokeObjectURL(x.url), 60000)); };
@@ -703,7 +703,7 @@ async function viewScan(bookId, pcCode = null) {
   document.body.classList.add("dark");
   const $ = (s) => app.querySelector(s);
   const video = $(".cam"), overlay = $(".overlay"), statusEl = $("#status"), ringFg = $("#ringfg");
-  const cam = N.isNative() ? new NativeCamera() : new Camera(video);
+  const cam = N.isAndroid() ? new NativeCamera() : new Camera(video);
   const prof = await Dev.profile().catch(() => ({}));
   cam.profile = prof;
   if (cam.native) video.classList.add("hidden");

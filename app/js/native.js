@@ -4,6 +4,11 @@ import { Capacitor, registerPlugin } from "../vendor/capacitor-core.js";
 export const isNative = () => {
   try { return Capacitor.isNativePlatform(); } catch { return false; }
 };
+// the Android app has its own native camera, shutter keys and updater; the iPhone app
+// uses the web camera (like the website)
+export const platform = () => { try { return Capacitor.getPlatform(); } catch { return "web"; } };
+export const isAndroid = () => isNative() && platform() === "android";
+export const isIOS = () => isNative() && platform() === "ios";
 
 const Filesystem = registerPlugin("Filesystem");
 const Share = registerPlugin("Share");
@@ -44,7 +49,7 @@ export const documentsLabel = (path) => "Documents/" + path;
 // Hardware shutter (volume keys, Bluetooth selfie remote, headset button).
 const Shutter = registerPlugin("Shutter");
 export async function onShutterKey(cb) {
-  if (!isNative()) return () => {};
+  if (!isAndroid()) return () => {};
   try {
     const h = await Shutter.addListener("press", cb);
     await Shutter.setActive({ active: true });
