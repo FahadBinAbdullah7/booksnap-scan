@@ -570,10 +570,26 @@ function detectByContent(img, mode, gray) {
   let G = null, fold = null;
   const top0 = new Int32Array(w).fill(-1), bot0 = new Int32Array(w).fill(-1);
   for (let x = T.x0; x <= T.x1; x++) { top0[x] = Math.round(ctop); bot0[x] = Math.round(cbot); }
+  let oneSide = 0;                     // -1: the other page is left of the text, +1: right of it
   if (mode === "spread") {
     fold = findFoldLine(gray, w, h, top0, bot0, T.x0, T.x1);
+    // no fold in the middle and the text has ONE page's shape (e.g. the other page is almost
+    // empty, or only partly in the picture): the fold is just outside the text, not inside it
+    if (!fold && cwid / chh < 1.1) {
+      const m = Math.round(w * 0.16), inset = Math.round(w * 0.02);
+      const fl = T.x0 > w * 0.06 ? findFoldLine(gray, w, h, top0, bot0, T.x0, T.x1, T.x0 - m, T.x0 + inset) : null;
+      const fr = T.x1 < w * 0.94 ? findFoldLine(gray, w, h, top0, bot0, T.x0, T.x1, T.x1 - inset, T.x1 + m) : null;
+      const pick = fl && (!fr || fl.s >= fr.s) ? fl : fr;
+      if (pick) { fold = pick; oneSide = pick === fl ? -1 : 1; }
+      else {
+        // no fold visible at all: never cut through the text — the other page is on the side
+        // of the text with more room in the picture
+        oneSide = T.x0 >= w - 1 - T.x1 ? -1 : 1;
+        G = oneSide === -1 ? Math.max(1, T.x0 - Math.round(w * 0.015)) : Math.min(w - 2, T.x1 + Math.round(w * 0.015));
+      }
+    }
     if (fold) G = Math.round((fold.a + fold.b * midY) * w);
-    else G = findGutter(img, top0, bot0, T.x0, T.x1);
+    else if (G == null) G = findGutter(img, top0, bot0, T.x0, T.x1);
   }
   // side edges: vertical lines just outside the text
   const sideBand = Math.max(8, cwid * 0.1);
@@ -584,7 +600,10 @@ function detectByContent(img, mode, gray) {
   const sideOf = (v, fallbackX) => (v ? { a: (v.y0 - v.s * v.xm) / w, b: (v.s * h) / w, ok: true } : { a: fallbackX / w, b: 0, ok: false });
   // v.at(y) = x  ->  x = (y0 - s*xm) + s*y  (pixels) -> fractions: a = (y0 - s*xm)/w, b = s*h/w
   const sideL = sideOf(vL, Math.max(0, T.x0 - sideBand * 0.4)), sideR = sideOf(vR, Math.min(w - 1, T.x1 + sideBand * 0.4));
-  const L = Math.max(0, Math.round((sideL.a + sideL.b * midY) * w)), R = Math.min(w - 1, Math.round((sideR.a + sideR.b * midY) * w));
+  let L = Math.max(0, Math.round((sideL.a + sideL.b * midY) * w)), R = Math.min(w - 1, Math.round((sideR.a + sideR.b * midY) * w));
+  // the other page (beyond the fold) reaches to the edge of the picture (or as wide as this page)
+  if (oneSide === -1 && G != null) { L = Math.max(0, G - (R - G)); sideL.a = L / w; sideL.b = 0; sideL.ok = false; }
+  if (oneSide === 1 && G != null) { R = Math.min(w - 1, G + (G - L)); sideR.a = R / w; sideR.b = 0; sideR.ok = false; }
   if (R - L < 0.2 * w) return (whyNot = "too narrow", null);
   const ranges = G == null ? [[L, R, 0]] : [[L, G, 1], [G, R, -1]];
   const band = Math.max(8, chh * 0.16);
@@ -883,13 +902,16 @@ function detectByPaper(img, mode = "spread", dbg = null) {
 // The fold between two pages: a long, thin crease (dark line, often with a bright
 // edge) running top to bottom, possibly slanted. Found band by band, then a
 // straight line x = a + b*y (fractions) is fitted through the band positions.
-function findFoldLine(g0, w, h, top, bot, L, R) {
+function findFoldLine(g0, w, h, top, bot, L, R, xa = null, xb = null) {
   const tops = [], bots = [];
   for (let x = L; x <= R; x++) if (top[x] >= 0) { tops.push(top[x]); bots.push(bot[x]); }
   const yt = median(tops), yb = median(bots), sp = yb - yt;
   if (sp < h * 0.3) return null;
-  const x0 = Math.round(L + 0.32 * (R - L)), x1 = Math.round(L + 0.68 * (R - L));
   const half = Math.max(1, Math.round(w * 0.002)), off = Math.max(3, Math.round(w * 0.006)), k = Math.max(2, Math.round(w * 0.004));
+  // search range: the middle of [L,R] by default, or an explicit range [xa,xb]
+  const x0 = Math.max(off + k + half, Math.round(xa != null ? xa : L + 0.32 * (R - L)));
+  const x1 = Math.min(w - 1 - off - k - half, Math.round(xb != null ? xb : L + 0.68 * (R - L)));
+  if (x1 - x0 < 3) return null;
   const bands = 12, pts = [];
   for (let bi = 0; bi < bands; bi++) {
     const ya = Math.round(yt + sp * (0.04 + (0.92 * bi) / bands)), yb2 = Math.round(yt + sp * (0.04 + (0.92 * (bi + 1)) / bands));
@@ -914,7 +936,7 @@ function findFoldLine(g0, w, h, top, bot, L, R) {
   const a = c[0] - c[1], b = c[1] * 2;
   const good = pts.filter((p) => Math.abs(a + b * p.y - p.x) < 0.012).length;
   if (good < Math.max(6, pts.length * 0.6) || Math.abs(b) > 0.15) return null;
-  return { a, b };
+  return { a, b, s: pts.reduce((t, p) => t + p.s, 0) / pts.length };
 }
 
 // left/right page edge as a straight line x = a + b*y (fractions), from the paper mask
