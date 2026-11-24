@@ -1232,7 +1232,17 @@ async function viewScan(bookId, pcCode = null) {
     m.el.querySelector("#c").onclick = () => { keepAuto(); m.close(); };
     m.el.querySelector("#o").onclick = () => (inp.value.trim() ? goCode(inp.value) : toast("Type the code shown on the PC"));
     inp.onkeydown = (e) => { if (e.key === "Enter" && inp.value.trim()) goCode(inp.value); };
-    if (saved) m.el.querySelector("#again").onclick = () => goCode(saved);
+    // my PC: keep trying until it answers (its page may be waking up), no new QR scan needed
+    if (saved) m.el.querySelector("#again").onclick = async () => {
+      keepAuto(); m.close();
+      userUnlinked = false;
+      await connectPc(saved, true);
+      if (!remote() && running && !userUnlinked) {
+        pcCodeLast = saved;
+        note("Looking for your PC… keep the BookSnap PC page open on the computer", 6000);
+        reconnectLoop(true);
+      }
+    };
     if (hasQR) m.el.querySelector("#qrscan").onclick = () => { keepAuto(); m.close(); scanQR(); };
     if (!saved && !hasQR) setTimeout(() => inp.focus(), 50);
   }

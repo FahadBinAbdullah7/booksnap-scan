@@ -47,6 +47,7 @@ function showQR() {
 // try the same code again for up to a minute before making a new one.
 let takenTries = 0;
 function startPeer(fresh = false) {
+  restartAt = 0; lostAt = 0;
   try { peer && peer.destroy(); } catch {}
   if (fresh) takenTries = 0;
   code = (!fresh && getSavedCode()) || newCode();
@@ -57,7 +58,8 @@ function startPeer(fresh = false) {
   peer.on("open", () => { takenTries = 0; setStatus(conn && conn.open ? "Phone connected" : "Waiting for phone…", conn && conn.open ? "ok" : ""); });
   peer.on("error", (e) => {
     if (e.type === "unavailable-id") {
-      if (++takenTries <= 12) { setStatus("Getting your code back…"); setTimeout(() => startPeer(false), 5000); return; }
+      if (conn && conn.open) { restartAt = Date.now() + 5000; return; }   // never drop a working phone link for this
+      if (++takenTries <= 12) { setStatus("Getting your code back…"); restartAt = Date.now() + 5000; return; }
       return startPeer(true);                                          // really taken: make a new one
     }
     if (e.type === "network" || e.type === "server-error" || e.type === "socket-error") { setStatus("No connection to link service — retrying", "bad"); setTimeout(checkLink, 3000); }
@@ -93,8 +95,12 @@ $("newcode").onclick = () => startPeer(true);
 
 // Keep the link service connection alive (sleep, Wi-Fi changes): if it is lost, rejoin with the
 // same code so the phone finds this PC again by itself. Also drop a phone link that went silent.
-let lastRx = 0, phoneBeats = false, liveCall = null, lostAt = 0;
+let lastRx = 0, phoneBeats = false, liveCall = null, lostAt = 0, restartAt = 0;
 function checkLink() {
+  if (restartAt && Date.now() >= restartAt) {
+    if (conn && conn.open) { restartAt = 0; try { peer.reconnect(); } catch {} }
+    else { startPeer(false); return; }
+  }
   if (!peer || peer.destroyed) { startPeer(false); return; }
   if (peer.disconnected) {
     if (!lostAt) lostAt = Date.now();
@@ -106,7 +112,19 @@ function checkLink() {
     onDisconnected();
   }
 }
-setInterval(checkLink, 5000);
+// Ticks come from a worker: Chrome slows the page's own timers to about once a minute when the
+// tab is in the background or the laptop screen is locked (worse once no phone is connected), and
+// the link service then forgets this PC, so the phone can't find it. A worker keeps ticking, and
+// on each tick the PC also tells the link service it is still here.
+function keepAlive() {
+  try { const ws = peer && !peer.disconnected && peer.socket && peer.socket._socket; if (ws && ws.readyState === 1) ws.send('{"type":"HEARTBEAT"}'); } catch {}
+}
+let ticker = null;
+try {
+  ticker = new Worker(URL.createObjectURL(new Blob(["setInterval(() => postMessage(0), 4000);"], { type: "text/javascript" })));
+  ticker.onmessage = () => { keepAlive(); checkLink(); };
+} catch { ticker = null; }
+if (!ticker) setInterval(() => { keepAlive(); checkLink(); }, 4000);
 window.addEventListener("online", () => setTimeout(checkLink, 500));
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkLink(); });
 
