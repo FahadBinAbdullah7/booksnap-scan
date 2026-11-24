@@ -248,8 +248,9 @@ html:has(body.native-cam), body.native-cam, body.native-cam #app, body.native-ca
 .zv-close { border: 0; background: rgba(255,255,255,.12); color: #fff; font-size: 18px; width: 40px; height: 40px; border-radius: 99px; cursor: pointer; }
 .zv-stage { position: relative; flex: 1; overflow: hidden; touch-action: none; cursor: zoom-in; }
 .zv-stage.zoomed { cursor: grab; }
-.zv-pic { position: absolute; inset: 0; display: grid; place-items: center; padding: 8px; }
-.zv-pic img, .zv-pic canvas { max-width: 100%; max-height: 100%; object-fit: contain; background: #fff; }
+.zv-pic { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 8px; box-sizing: border-box; }
+/* the whole page always fits (a grid cell let big pictures overflow and get cut off) */
+.zv-pic img, .zv-pic canvas { display: block; max-width: 100%; max-height: 100%; min-width: 0; min-height: 0; width: auto; height: auto; object-fit: contain; background: #fff; }
 .zv-hint { text-align: center; font-size: 12px; color: #94a3b8; padding: 6px 10px calc(8px + var(--safe-b, 0px)); }
 .viewer { touch-action: pan-y; }
 .viewer.zoomed { touch-action: none; }

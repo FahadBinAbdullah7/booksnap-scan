@@ -120,6 +120,22 @@ function modal(html) {
   document.getElementById("modal-root").appendChild(w);
   return { el: w, close: () => w.remove() };
 }
+export function confirmBox(text) {
+  return new Promise((res) => {
+    const m = modal(`<p>${esc(text)}</p><div class="row end"><button class="btn" id="no">Cancel</button><button class="btn danger" id="yes">🗑 Delete</button></div>`);
+    const done = (v) => { document.removeEventListener("keydown", onKey, true); m.close(); res(v); };
+    const onKey = (e) => {
+      e.stopPropagation();                               // no Space/Backspace shortcuts behind the box
+      if (e.key === "Escape") { e.preventDefault(); done(false); } else if (e.key === "Enter") { e.preventDefault(); done(true); }
+    };
+    document.addEventListener("keydown", onKey, true);
+    m.el.querySelector("#no").onclick = () => done(false);
+    m.el.querySelector("#yes").onclick = () => done(true);
+    m.el.querySelector("#yes").focus();
+  });
+}
+let deleter = null;
+export function onDeletePage(fn) { deleter = fn; }
 function alertBox(text) {
   const m = modal(`<p>${esc(text)}</p><div class="row end"><button class="btn primary" id="ok">OK</button></div>`);
   m.el.querySelector("#ok").onclick = () => m.close();
@@ -214,6 +230,7 @@ function setupZoom(send) {
   const th = $("thumbs");
   if (th) th.addEventListener("click", (e) => {
     const f = e.target.closest("figure");
+    if (f && e.target.closest(".tdel")) { e.stopPropagation(); if (deleter) deleter(+f.dataset.o); return; }
     if (f && f._full) zoomViewer(f._full, "Page " + Math.round(+f.dataset.o));
   });
 }

@@ -118,6 +118,14 @@ function onConnected() {
   $("thumbsCard").classList.remove("hidden");
   UI.setControlsEnabled(true);
   send({ t: "pc-settings", originals: $("originals").checked });
+  scheduleSync();                                   // get the pages already in the phone's book
+}
+let syncTimer = null;
+const scheduleSync = (ms = 900) => { clearTimeout(syncTimer); syncTimer = setTimeout(() => autoSync(), ms); };
+// ask only for the pages this PC doesn't have yet (the phone skips matching ones)
+function autoSync(manual = false) {
+  if (!conn || !conn.open) return;
+  send({ t: "sync", auto: !manual, have: [...pages.entries()].map(([o, p]) => [o, p.id]) });
 }
 
 function onDisconnected() {
@@ -166,7 +174,7 @@ async function onMessage(m) {
       UI.rotateLive(state.rotate);
       $("filter").value = state.filter;
       $("torch").classList.toggle("hidden", !state.torch);
-      if (bookChanged) { pages.clear(); $("thumbs").innerHTML = ""; bookDir = null; if (rootDir) await openBookDir(); }
+      if (bookChanged) { pages.clear(); $("thumbs").innerHTML = ""; bookDir = null; if (rootDir) await openBookDir(); if (state.book) scheduleSync(); }
       updateCounts();
       break;
     }
@@ -207,6 +215,17 @@ async function onMessage(m) {
     }
     case "sync-start": {
       for (const o of [...pages.keys()]) if (o > m.total) { pages.delete(o); await removeFile(`${pad(o)}.jpg`); const f = $("thumbs").querySelector(`[data-o="${o}"]`); if (f) f.remove(); }
+      updateCounts();
+      break;
+    }
+    case "sync-done": {
+      if (m.sent) toast(`Got ${m.sent} page${m.sent > 1 ? "s" : ""} from the phone`);
+      else if (!m.quiet) toast(m.total ? "All pages are already on this PC" : "No pages in this book yet");
+      break;
+    }
+    case "page-deleted": {
+      setStatus(`Page ${Math.round(m.order)} deleted`, "ok");
+      updateCounts();
       break;
     }
     case "busy": setBusy(false); toast("Phone is busy — try again"); break;
@@ -251,7 +270,16 @@ UI.setupControls(send, () => state, async () => {
 $("filter").onchange = () => send({ t: "filter", f: $("filter").value });
 $("torch").onclick = () => { torchOn = !torchOn; $("torch").classList.toggle("on", torchOn); send({ t: "torch", on: torchOn }); };
 $("originals").onchange = () => send({ t: "pc-settings", originals: $("originals").checked });
-$("sync").onclick = () => { send({ t: "sync" }); toast("Asking the phone for all pages…"); };
+$("sync").onclick = () => { autoSync(true); toast("Asking the phone for missing pages…"); };
+
+// 🗑 delete a page (on the phone too); later pages move up one number
+async function deletePage(order) {
+  const p = pages.get(order);
+  if (!p || !conn || !conn.open) return toast(conn && conn.open ? "Wait until this page has arrived" : "Phone not connected");
+  if (!(await UI.confirmBox(`Delete page ${Math.round(order)}? It is deleted on the phone too, and the pages after it move up one number.`))) return;
+  send({ t: "delete-page", id: p.id });
+}
+UI.onDeletePage(deletePage);
 
 // ---------------------------------------------------------------- saving on this PC
 async function openBookDir() {
@@ -332,7 +360,7 @@ function figFor(order) {
   if (!f) {
     f = document.createElement("figure");
     f.dataset.o = order;
-    f.innerHTML = `<img alt=""><figcaption>${Math.round(order)}</figcaption>`;
+    f.innerHTML = `<img alt=""><figcaption>${Math.round(order)}</figcaption><button type="button" class="tdel" title="Delete this page (on the phone too)" aria-label="Delete page">🗑</button>`;
     const figs = [...$("thumbs").children];
     const after = figs.find((x) => +x.dataset.o < order);
     $("thumbs").insertBefore(f, after || null);

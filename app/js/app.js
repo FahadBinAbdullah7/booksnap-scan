@@ -1162,9 +1162,36 @@ async function viewScan(bookId, pcCode = null) {
     else if (m.t === "torch") await setTorch(!!m.on);
     else if (m.t === "pc-settings") pcOriginals = !!m.originals;
     else if (m.t === "sync") {
+      // send the pages the PC doesn't have yet (or has under another number); m.have = [[order, id], …]
+      const have = new Map(Array.isArray(m.have) ? m.have : []);
       const all = await DB.listPages(bookId);
-      await link.send({ t: "sync-start", total: all.length });          // PC drops files beyond the last page
-      for (let i = 0; i < all.length; i++) { if (!remote()) break; if (all[i].status === "done") await sendPage(all[i], i + 1); }
+      await link.send({ t: "sync-start", total: all.length, quiet: !!m.auto });   // PC drops files beyond the last page
+      let sent = 0;
+      for (let i = 0; i < all.length; i++) {
+        if (!remote()) break;
+        if (all[i].status !== "done" || have.get(i + 1) === all[i].id) continue;
+        await sendPage(all[i], i + 1); sent++;
+      }
+      if (remote()) link.send({ t: "sync-done", sent, total: all.length, quiet: !!m.auto });
+    } else if (m.t === "delete-page" && typeof m.id === "string") {
+      if (busy) return link.send({ t: "error", msg: "busy — try again" });
+      const all = await DB.listPages(bookId);
+      const idx = all.findIndex((p) => p.id === m.id);
+      if (idx < 0) return link.send({ t: "error", msg: "that page is not in this book any more" });
+      await DB.deletePages([m.id]);
+      shots.length = 0;                                  // ↶ Retake no longer refers to a known photo
+      $("#undo").classList.add("hidden");
+      lastShotSig = null;
+      count = Math.max(0, count - 1);
+      $("#count").textContent = count;
+      setStatus(`Page ${idx + 1} deleted from the PC`);
+      savedAt = performance.now();
+      sendState();
+      // later pages move up one number: resend them so the PC folder matches the phone
+      const rest = await DB.listPages(bookId);
+      await link.send({ t: "sync-start", total: rest.length, quiet: true });
+      for (let i = idx; i < rest.length; i++) { if (!remote()) break; if (rest[i].status === "done") await sendPage(rest[i], i + 1); }
+      link.send({ t: "page-deleted", order: idx + 1, total: rest.length });
     } else if (m.t === "reject") { toast(m.reason || "PC refused the connection", 4000); disconnectPc(false); }
   }
   // The PC names files by the page's position in the book (1, 2, 3 …), so its
