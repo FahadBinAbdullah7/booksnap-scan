@@ -128,7 +128,7 @@ export class Camera {
 // Same interface as Camera, but uses the native CameraX preview (shown under
 // the transparent page) and full-quality native photos.
 import { Capacitor, registerPlugin } from "../vendor/capacitor-core.js";
-const NC = registerPlugin("NativeCamera");
+export const NC = registerPlugin("NativeCamera");
 
 function b64ToBlob(b64, type = "image/jpeg") {
   const bin = atob(b64), u = new Uint8Array(bin.length);

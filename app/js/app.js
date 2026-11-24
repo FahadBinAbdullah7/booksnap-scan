@@ -34,6 +34,7 @@ const emit = (type, detail) => bus.dispatchEvent(new CustomEvent(type, { detail 
 function on(type, fn) { const h = (e) => fn(e.detail); bus.addEventListener(type, h); return () => bus.removeEventListener(type, h); }
 
 function toast(msg, ms = 2200) {
+  document.querySelectorAll(".toast").forEach((o) => o.remove());     // one message at a time, never on top of each other
   const t = document.createElement("div");
   t.className = "toast"; t.textContent = msg;
   document.body.appendChild(t);
@@ -748,6 +749,12 @@ async function viewScan(bookId, pcCode = null) {
     for (const sel of ["#delay", "#pc", "#segAuto"]) $(sel)?.classList.add("hidden");
     if (special.kind === "retake") $("#segMode")?.classList.add("hidden");
   }
+  // small phones: the chip row can wrap to 2 lines — keep the option rows below it so no chip is hidden
+  {
+    const top = $(".scan-top"), opts = $(".scan-opts");
+    const place = () => { if (top.isConnected) opts.style.top = top.offsetTop + top.offsetHeight + 8 + "px"; };
+    new ResizeObserver(place).observe(top);
+  }
   const backTo = () => go(special ? "#/page/" + (special.added[0] || special.pageId) : "#/book/" + bookId);
   const cam = N.isAndroid() ? new NativeCamera() : new Camera(video);
   const prof = await Dev.profile().catch(() => ({}));
@@ -845,7 +852,7 @@ async function viewScan(bookId, pcCode = null) {
     mirrorSent = { text: null, ring: -1 }; mirror();      // (re)send the status line too
     return link.send({
       t: "state", book: book.name, mode, rotate: effRotate(), filter: book.filter || "magic", count, torch: cam.canTorch,
-      orient, auto: !!settings.auto, lock: lock ? { pts: lock.pts } : null,
+      orient, auto: !!settings.auto, paused: !!(settings.auto && paused), lock: lock ? { pts: lock.pts } : null,
     });
   };
   // the page outline the phone is using, for the PC's live view (max ~2.5 per second)
@@ -910,7 +917,9 @@ async function viewScan(bookId, pcCode = null) {
   // Auto: pause / start the automatic photos (manual shutter still works)
   const setPaused = (v) => {
     paused = v; stillSince = 0; setRing(0); labels();
+    if (!v && autoOn()) state = "watch";
     note(v ? "⏸ Auto paused — tap ▶ Start to continue" : "▶ Auto started — turn the page", 2500);
+    sendState();
   };
   $("#pause").onclick = () => setPaused(!paused);
   $("#delay").onclick = () => {
@@ -1108,6 +1117,7 @@ async function viewScan(bookId, pcCode = null) {
     else if (m.t === "mode") { await setMode(m.mode === "single" ? "single" : "spread"); lock = book.lock && book.lock.mode === mode ? book.lock : null; labels(); }
     else if (m.t === "rotate") rotateNext();
     else if (m.t === "orient" && (m.v === "portrait" || m.v === "landscape")) await setOrient(m.v);
+    else if (m.t === "pause") { if (autoOn()) setPaused(!!m.on); else sendState(); }
     else if (m.t === "auto") {
       settings.auto = !!m.on; saveSettings(); paused = false; labels();
       state = autoOn() ? "watch" : "idle"; stillSince = 0;
@@ -1286,6 +1296,12 @@ async function viewScan(bookId, pcCode = null) {
     if (k >= 0) seenPages[k].fp = null;          // keep memory small on long books
   }
 
+  // live outline: in 2-page mode, is one "page" only a thin strip at the side (one page in view)?
+  function onlyOnePage() {
+    if (lock || !geo || !geo.found || geo.gutter == null) return false;
+    const wl = geo.gutter - geo.L, wr = geo.R - geo.gutter;
+    return Math.min(wl, wr) < 0.3 * Math.max(wl, wr);
+  }
   async function shoot(opts = {}) {
     if (busy) return;
     // never fill the phone: stop before storage runs out
@@ -1319,8 +1335,12 @@ async function viewScan(bookId, pcCode = null) {
       beep();
       try { navigator.vibrate?.(60); } catch {}
       $("#lastimg").src = preview;
-      const ps = await DB.addCapture(bookId, blob, { rotate: effRotate(), mode, filter: book.filter || "magic", lock: lock ? { mode: lock.mode, pts: lock.pts, ...(lock.plain ? { plain: true } : {}) } : null,
-        orders: special ? takeOrders(special.slot, mode === "spread" ? 2 : 1) : null });
+      // 2-page mode but only ONE page in the picture (the other side is just a thin strip):
+      // save it as one page, never as a page plus an empty sliver
+      const one = mode === "spread" && onlyOnePage();
+      const shotMode = one ? "single" : mode;
+      const ps = await DB.addCapture(bookId, blob, { rotate: effRotate(), mode: shotMode, filter: book.filter || "magic", lock: lock ? { mode: lock.mode, pts: lock.pts, ...(lock.plain ? { plain: true } : {}) } : null,
+        orders: special ? takeOrders(special.slot, shotMode === "spread" ? 2 : 1) : null });
       if (special) {
         special.added.push(...ps.map((p) => p.id));
         kickQueue();
@@ -1344,7 +1364,7 @@ async function viewScan(bookId, pcCode = null) {
       $("#undo").classList.remove("hidden");
       kickQueue();
       savedAt = performance.now();
-      setStatus(mode === "spread" ? `Saved pages ${count - 1}–${count} ✓` : `Saved page ${count} ✓`);
+      setStatus(ps.length > 1 ? `Saved pages ${count - 1}–${count} ✓` : one ? `Saved page ${count} ✓ (one page in the picture)` : `Saved page ${count} ✓`);
       if (opts.auto) {
         // the page number is only read for the message and the "pages missing?" warning — after
         // saving, in the background, so it never slows down or blocks a photo

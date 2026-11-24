@@ -86,13 +86,17 @@ button:disabled { opacity: .35; }
 .busy { position: absolute; top: 18px; left: 50%; transform: translateX(-50%); background: rgba(15,23,42,.85); color: #fff;
   padding: 8px 14px; border-radius: 99px; font-size: 14px; display: flex; align-items: center; gap: 8px; }
 .busy .spin { width: 18px; height: 18px; border-width: 2px; }
-.filters { position: fixed; left: 0; right: 0; bottom: calc(70px + var(--safe-b)); display: flex; gap: 8px; justify-content: center;
-  padding: 8px 12px; overflow-x: auto; }
+.filters { position: fixed; left: 0; right: 0; bottom: calc(70px + var(--safe-b)); display: flex; gap: 8px;
+  padding: 8px 12px; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.filters::-webkit-scrollbar { display: none; }
+/* centred when they fit, scrollable from the first one when they don't */
+.filters > :first-child { margin-left: auto; } .filters > :last-child { margin-right: auto; }
 .fbtn { border: 1px solid var(--line); background: var(--card); padding: 8px 14px; border-radius: 99px; white-space: nowrap; font-size: 14px; font-weight: 600; }
 .fbtn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 /* page preview: Retake / Add page / Delete */
 .pagetools { position: fixed; left: 0; right: 0; bottom: calc(124px + var(--safe-b)); display: flex; gap: 8px; justify-content: center; padding: 4px 12px; }
-.pagetools .btn { padding: 8px 14px; font-weight: 600; }
+.pagetools .btn { padding: 8px 12px; font-weight: 600; white-space: nowrap; flex: 0 1 auto; min-width: 0; font-size: 15px; }
+@media (max-width: 380px) { .pagetools { gap: 6px; padding: 4px 8px; } .pagetools .btn { padding: 8px 9px; font-size: 14px; } }
 .pagetools .btn.danger { background: var(--card); color: var(--danger); border-color: var(--danger); }
 
 /* ---------- scanner */

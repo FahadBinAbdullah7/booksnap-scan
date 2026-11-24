@@ -369,7 +369,8 @@ function textBlock(g, w, h) {
       for (let k = 0; k < NSEC; k++) { let on = 0; for (let yy = Math.max(0, y - r); yy <= Math.min(h - 1, y + r) && !on; yy++) on = hit[yy * NSEC + k]; c += on; }
       spread[y] = c;
     }
-    return mainRun(spread, h, 2, Math.round(h * 0.12), Math.round(h / 2));
+    // a big figure (few words) may sit between paragraphs: up to ~30% of the height
+    return mainRun(spread, h, 2, Math.round(h * 0.3), Math.round(h / 2));
   };
   const yr = rows(x0, x1);
   if (!yr || yr.b - yr.a < h * 0.12) return null;
@@ -557,6 +558,30 @@ function fitEdge(xs, ys, x0, x1, curlDirs) {
 }
 
 let whyNot = "";
+// How much a fold line runs through lines of text, compared with an ordinary column of
+// the text block: ~0 for the gutter between two pages (two blank inner margins), ~1 when
+// the "fold" is really a line in the middle of ONE page (a figure, a table rule).
+function foldCrossesText(glyph, w, h, y0, y1, xAt, x0, x1) {
+  const r = Math.max(2, Math.round(w * 0.005));
+  y0 = Math.max(0, Math.round(y0)); y1 = Math.min(h - 1, Math.round(y1));
+  const hitRows = (fx) => {
+    let n = 0;
+    for (let y = y0; y <= y1; y++) {
+      const xc = Math.round(fx(y));
+      let on = 0;
+      for (let x = Math.max(0, xc - r); x <= Math.min(w - 1, xc + r) && !on; x++) on = glyph[y * w + x];
+      n += on;
+    }
+    return n;
+  };
+  const refs = [];
+  for (let k = 1; k <= 9; k++) { const xc = x0 + ((x1 - x0) * k) / 10; refs.push(hitRows(() => xc)); }
+  refs.sort((a, b) => a - b);
+  const ref = refs[6];
+  return ref < 8 ? 0 : hitRows(xAt) / ref;
+}
+const CROSS_MAX = 0.6;
+
 function detectByContent(img, mode, gray) {
   whyNot = "";
   const { w, h } = img;
@@ -566,19 +591,45 @@ function detectByContent(img, mode, gray) {
   const ctop = T.y0, cbot = T.y1, chh = Math.max(10, cbot - ctop), cwid = T.x1 - T.x0;
   const midY = (ctop + cbot) / 2 / h;
   const gap = Math.max(2, Math.round(h * 0.006));
+  // share of bright paper in a band beside x (dir -1: left of x, +1: right), over the text rows
+  let paperV = 0;
+  { const hs = new Uint32Array(256); let n = 0;
+    for (let y = ctop; y <= cbot; y += 2) for (let x = T.x0; x <= T.x1; x += 2) { hs[gray[y * w + x]]++; n++; }
+    paperV = percentileFromHist(hs, n, 0.85); }
+  const paperBeyond = (x, dir) => {
+    const xa = Math.round(dir > 0 ? x + w * 0.015 : x - w * 0.09), xb = Math.round(dir > 0 ? x + w * 0.09 : x - w * 0.015);
+    const a = Math.max(0, xa), b = Math.min(w - 1, xb);
+    if (b - a < 2) return 0;
+    let n = 0, on = 0;
+    for (let y = ctop; y <= cbot; y += 2) for (let xx = a; xx <= b; xx += 2) { n++; if (gray[y * w + xx] >= paperV * 0.75) on++; }
+    return on / n;
+  };
   // the fold first (from the text block extents), so each page gets its own edge lines
   let G = null, fold = null;
   const top0 = new Int32Array(w).fill(-1), bot0 = new Int32Array(w).fill(-1);
   for (let x = T.x0; x <= T.x1; x++) { top0[x] = Math.round(ctop); bot0[x] = Math.round(cbot); }
   let oneSide = 0;                     // -1: the other page is left of the text, +1: right of it
   if (mode === "spread") {
+    // a "fold" straight through lines of text is a line on ONE page (figure, rule), not the fold
+    const cuts = (fx) => foldCrossesText(T.glyph, w, h, ctop, cbot, fx, T.x0, T.x1) > CROSS_MAX;
     fold = findFoldLine(gray, w, h, top0, bot0, T.x0, T.x1);
-    // no fold in the middle and the text has ONE page's shape (e.g. the other page is almost
-    // empty, or only partly in the picture): the fold is just outside the text, not inside it
-    if (!fold && cwid / chh < 1.1) {
+    if (fold && cuts((y) => (fold.a + (fold.b * y) / h) * w)) fold = null;
+    let onePage = !fold && cwid / chh < 1.1;
+    if (!fold && !onePage) {
+      const g = findGutter(img, top0, bot0, T.x0, T.x1);
+      if (g != null && cuts(() => g)) onePage = true; else G = g;
+    }
+    // no fold in the middle and the text is ONE page (its shape, or every split cuts its lines):
+    // e.g. the other page is almost empty, only partly in the picture, or not there at all —
+    // the fold is just outside the text, not inside it
+    if (onePage) {
       const m = Math.round(w * 0.16), inset = Math.round(w * 0.02);
-      const fl = T.x0 > w * 0.06 ? findFoldLine(gray, w, h, top0, bot0, T.x0, T.x1, T.x0 - m, T.x0 + inset) : null;
-      const fr = T.x1 < w * 0.94 ? findFoldLine(gray, w, h, top0, bot0, T.x0, T.x1, T.x1 - inset, T.x1 + m) : null;
+      const at = (f) => (f.a + f.b * midY) * w;
+      // a fold beside the text needs paper (the other page) beyond it — not the table
+      let fl = T.x0 > w * 0.06 ? findFoldLine(gray, w, h, top0, bot0, T.x0, T.x1, T.x0 - m, T.x0 + inset) : null;
+      let fr = T.x1 < w * 0.94 ? findFoldLine(gray, w, h, top0, bot0, T.x0, T.x1, T.x1 - inset, T.x1 + m) : null;
+      if (fl && (paperBeyond(at(fl), -1) < 0.5 || cuts((y) => (fl.a + (fl.b * y) / h) * w))) fl = null;
+      if (fr && (paperBeyond(at(fr), 1) < 0.5 || cuts((y) => (fr.a + (fr.b * y) / h) * w))) fr = null;
       const pick = fl && (!fr || fl.s >= fr.s) ? fl : fr;
       if (pick) { fold = pick; oneSide = pick === fl ? -1 : 1; }
       else {
@@ -589,7 +640,6 @@ function detectByContent(img, mode, gray) {
       }
     }
     if (fold) G = Math.round((fold.a + fold.b * midY) * w);
-    else if (G == null) G = findGutter(img, top0, bot0, T.x0, T.x1);
   }
   // side edges: vertical lines just outside the text
   const sideBand = Math.max(8, cwid * 0.1);
@@ -602,8 +652,10 @@ function detectByContent(img, mode, gray) {
   const sideL = sideOf(vL, Math.max(0, T.x0 - sideBand * 0.4)), sideR = sideOf(vR, Math.min(w - 1, T.x1 + sideBand * 0.4));
   let L = Math.max(0, Math.round((sideL.a + sideL.b * midY) * w)), R = Math.min(w - 1, Math.round((sideR.a + sideR.b * midY) * w));
   // the other page (beyond the fold) reaches to the edge of the picture (or as wide as this page)
-  if (oneSide === -1 && G != null) { L = Math.max(0, G - (R - G)); sideL.a = L / w; sideL.b = 0; sideL.ok = false; }
-  if (oneSide === 1 && G != null) { R = Math.min(w - 1, G + (G - L)); sideR.a = R / w; sideR.b = 0; sideR.ok = false; }
+  // (no paper there at all — just the table: the other page is not in the picture, a sliver marks it)
+  const sliver = Math.round(w * 0.02);
+  if (oneSide === -1 && G != null) { L = Math.max(0, paperBeyond(G, -1) < 0.5 ? G - sliver : G - (R - G)); sideL.a = L / w; sideL.b = 0; sideL.ok = false; }
+  if (oneSide === 1 && G != null) { R = Math.min(w - 1, paperBeyond(G, 1) < 0.5 ? G + sliver : G + (G - L)); sideR.a = R / w; sideR.b = 0; sideR.ok = false; }
   if (R - L < 0.2 * w) return (whyNot = "too narrow", null);
   const ranges = G == null ? [[L, R, 0]] : [[L, G, 1], [G, R, -1]];
   const band = Math.max(8, chh * 0.16);
@@ -726,13 +778,28 @@ export function bookCheck(img, geo, pts = null, preT, ref = null) {
   // too large outline over the table does not count)
   const inner = polys.map((q) => { const cx = q.reduce((s_, p_) => s_ + p_[0], 0) / q.length, cy = q.reduce((s_, p_) => s_ + p_[1], 0) / q.length; return q.map(([x, y]) => [cx + (x - cx) * 0.9, cy + (y - cy) * 0.9]); });
   const inInner = (x, y) => inner.some((q) => { let c = false; for (let a = 0, b = q.length - 1; a < q.length; b = a++) { const [xa, ya] = q[a], [xb, yb] = q[b]; if (ya > y !== yb > y && x < ((xb - xa) * (y - ya)) / (yb - ya) + xa) c = !c; } return c; });
+  // the shadow in the fold between two pages runs from the table above the book to the table
+  // below it: near the fold only skin-coloured things count (a finger), not dark shadow
+  let foldX = null;
+  if (pts && pts.length === 6) {
+    const [, FT, , , FB] = pts, dy = FB[1] - FT[1] || 1;
+    foldX = (y) => (FT[0] + ((FB[0] - FT[0]) * (y / h - FT[1])) / dy) * w;
+  } else if (!pts && geo && geo.found && geo.mode === "spread" && geo.gutter != null) {
+    const f = geo.fold || { a: geo.gutter, b: 0 };
+    foldX = (y) => (f.a + (f.b * y) / h) * w;
+  }
+  const foldBand = Math.max(3, Math.round(w * 0.025));
   const occ = new Uint8Array(w * h);
-  for (let i = 0, j = 0; i < w * h; i++, j += 4) {
-    if (T && T.glyph[i]) continue;
-    const r = d[j], g = d[j + 1], b = d[j + 2], mx = Math.max(r, g, b), mn = Math.min(r, g, b);
-    const sat = mx ? (mx - mn) / mx : 0;
-    if (gray[i] < paperV * 0.62 || (sat > 0.25 && r > b + 15 && gray[i] < paperV * 0.95)
-      || (sat > 0.18 && r > g + 12 && r > b + 25 && gray[i] < paperV * 0.97)) occ[i] = 1;     // skin (also pale, well lit)
+  for (let y = 0, i = 0; y < h; y++) {
+    const fx = foldX ? foldX(y) : -1e9;
+    for (let x = 0; x < w; x++, i++) {
+      if (T && T.glyph[i]) continue;
+      const j = i * 4, r = d[j], g = d[j + 1], b = d[j + 2], mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+      const sat = mx ? (mx - mn) / mx : 0;
+      const skin = (sat > 0.25 && r > b + 15 && gray[i] < paperV * 0.95)
+        || (sat > 0.18 && r > g + 12 && r > b + 25 && gray[i] < paperV * 0.97);      // skin (also pale, well lit)
+      if (skin || (gray[i] < paperV * 0.62 && Math.abs(x - fx) > foldBand)) occ[i] = 1;
+    }
   }
   const om = morph(morph(occ, w, h, 1, false), w, h, 2, true);
   const { lab, comps } = labelComponents(om, w, h);
@@ -817,6 +884,19 @@ export function detect(img, mode = "spread", dbg = null) {
   const sT = geoScore(byText, F, glyph, img.w, img.h), sP = geoScore(byPaper, F, glyph, img.w, img.h);
   byText.score = +sT.toFixed(1); byPaper.score = +sP.toFixed(1);
   if (dbg) { dbg.scoreText = sT; dbg.scorePaper = sP; }
+  // 2-page mode: an outline whose fold cuts through lines of text splits ONE page — never use it
+  if (mode === "spread" && byText.text) {
+    const t = byText.text, W = img.w, H = img.h;
+    const cross = (g) => {
+      if (g.gutter == null) return 0;
+      const f = g.fold || { a: g.gutter, b: 0 };
+      return foldCrossesText(glyph, W, H, t.top * H, t.bot * H, (y) => (f.a + (f.b * y) / H) * W, t.x0 * W, t.x1 * W);
+    };
+    const cT = cross(byText), cP = cross(byPaper);
+    if (dbg) { dbg.crossText = cT; dbg.crossPaper = cP; }
+    if (cP > CROSS_MAX && cT <= CROSS_MAX) return byText;
+    if (cT > CROSS_MAX && cP <= CROSS_MAX) { byPaper.text = byText.text; return byPaper; }
+  }
   if (sP > sT * 1.05) { byPaper.text = byText.text; return byPaper; }
   return byText;
 }

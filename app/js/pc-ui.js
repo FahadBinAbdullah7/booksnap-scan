@@ -7,7 +7,7 @@ import { attachZoom, zoomButtons, zoomViewer } from "./zoomview.js";
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-export const CONTROL_IDS = ["capture", "undo", "segMode", "segOrient", "segAuto", "lockbtn", "rotbtn", "filter", "torch"];
+export const CONTROL_IDS = ["capture", "undo", "segMode", "segOrient", "segAuto", "lockbtn", "rotbtn", "filter", "torch", "pausebtn"];
 
 export function setControlsEnabled(on) {
   for (const id of CONTROL_IDS) {
@@ -24,6 +24,13 @@ export function setupControls(send, getState, getFrame) {
   pick("segMode", (v) => send({ t: "mode", mode: v }));
   pick("segOrient", (v) => send({ t: "orient", v }));
   pick("segAuto", (v) => send({ t: "auto", on: v === "auto" }));
+  // Auto: pause / start (button or key P); the phone confirms with its state
+  const togglePause = () => { const st = getState(); if (st.auto) send({ t: "pause", on: !st.paused }); };
+  $("pausebtn").onclick = togglePause;
+  document.addEventListener("keydown", (e) => {
+    if (e.code !== "KeyP" || e.ctrlKey || e.metaKey || e.altKey || e.target.closest?.("input, select, textarea") || document.querySelector(".zoomview, .modal-wrap")) return;
+    if (!$("pausebtn").disabled) { e.preventDefault(); togglePause(); }
+  });
   if ($("rotbtn")) $("rotbtn").onclick = () => send({ t: "rotate" });
   setupZoom(send);
   // Lock: click → fix the area → 🔒 Lock. Click again to change it (🎯 New area) or unlock.
@@ -63,6 +70,10 @@ export function showState(st) {
   seg("segMode", st.mode);
   seg("segOrient", st.orient || "portrait");
   seg("segAuto", st.auto ? "auto" : "manual");
+  const pb = $("pausebtn");
+  pb.classList.toggle("hidden", !st.auto);
+  pb.textContent = st.paused ? "▶ Start" : "⏸ Pause";
+  pb.classList.toggle("warn", !!st.paused);
   $("lockbtn").textContent = st.lock ? "🔒 Locked" : "🔓 Lock area";
   $("lockbtn").classList.toggle("on", !!st.lock);
 }

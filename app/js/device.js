@@ -1,10 +1,9 @@
 // Adapt BookSnap to the phone: low-memory phones get smaller photos and
 // processing sizes (pages stay sharp enough to read and print), and we keep an
 // eye on free storage so a long scan never fills the phone.
-import { registerPlugin } from "../vendor/capacitor-core.js";
 import { isAndroid } from "./native.js";
 
-const NC = registerPlugin("NativeCamera");
+import { NC } from "./camera.js";   // one registration only
 let cached = null;
 
 export async function info() {
