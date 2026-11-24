@@ -1088,20 +1088,31 @@ async function viewScan(bookId, pcCode = null) {
       if (!userUnlinked) reconnectLoop(); else setStatus("PC disconnected");
     });
   }
-  async function reconnectLoop() {
+  async function reconnectLoop(quiet = false) {
     if (reconnecting) return;
     reconnecting = true;
-    toast("PC connection lost — reconnecting…");
-    const until = Date.now() + 5 * 60 * 1000;
-    while (running && !remote() && !userUnlinked && Date.now() < until) {
-      setStatus("Reconnecting to PC…");
+    if (!quiet) toast("PC connection lost — reconnecting…");
+    // keep trying while the scanner is open (no QR scan needed): every 3 s, slowing to every 15 s
+    let wait = 3000, tries = 0;
+    kickReconnect = () => { wait = 0; };
+    while (running && !remote() && !userUnlinked && pcCodeLast) {
+      setStatus(++tries > 3 ? "PC not reachable — still trying… (is the PC page open?)" : "Reconnecting to PC…");
       await connectPc(pcCodeLast, true);
       if (remote()) break;
-      await new Promise((r) => setTimeout(r, 3000));
+      for (let t = 0; t < wait && wait && running && !userUnlinked; t += 250) await new Promise((r) => setTimeout(r, 250));
+      wait = Math.min(15000, (wait || 3000) + 2000);
     }
+    kickReconnect = null;
     reconnecting = false;
-    if (!remote() && running && !userUnlinked) note("PC not reachable — tap 💻 PC to connect again", 60000);
   }
+  let kickReconnect = null;
+  // back from the background / internet back: reconnect right away
+  const onWake = () => {
+    if (document.visibilityState !== "visible" || !running || remote() || userUnlinked || !pcCodeLast) return;
+    if (reconnecting) kickReconnect && kickReconnect(); else reconnectLoop();
+  };
+  document.addEventListener("visibilitychange", onWake);
+  window.addEventListener("online", onWake);
   function disconnectPc(user) {
     if (user) userUnlinked = true;
     if (!link) return;
@@ -1583,6 +1594,8 @@ async function viewScan(bookId, pcCode = null) {
     cam.stop();
     try { wake?.release(); } catch {}
     document.removeEventListener("visibilitychange", onVis);
+    document.removeEventListener("visibilitychange", onWake);
+    window.removeEventListener("online", onWake);
     document.body.classList.remove("dark");
   };
 
@@ -1604,7 +1617,8 @@ async function viewScan(bookId, pcCode = null) {
     else if (pcCode) connectPc(pcCode);
     else if (settings.lastPc && settings.pcAuto !== false && !isDoc) {    // reconnect to the saved PC by itself
       note("Connecting to your PC…", 4000);
-      connectPc(settings.lastPc, true).then(() => { if (!remote()) note("PC not found — tap 💻 PC to connect", 4000); });
+      pcCodeLast = settings.lastPc;
+      connectPc(settings.lastPc, true).then(() => { if (!remote() && running && !userUnlinked) { note("PC not found yet — will keep trying (or tap 💻 PC)", 4000); reconnectLoop(true); } });
     }
   } catch (e) {
     console.error(e);

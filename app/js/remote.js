@@ -53,10 +53,35 @@ export class PhoneLink extends EventTarget {
         rej(e.type === "peer-unavailable" ? new Error("PC not found. Check the code and that the PC page is open.") : e);
       });
     });
-    this.conn.on("data", (d) => this.dispatchEvent(new CustomEvent("msg", { detail: d })));
-    this.conn.on("close", () => this.dispatchEvent(new Event("close")));
+    // heartbeat: a link that went silent (phone slept, Wi-Fi dropped) is closed so the app
+    // reconnects by itself. Only used once the PC answers pings (older PC pages don't).
+    this.lastRx = this.lastTick = Date.now(); this.heard = false;
+    this.conn.on("data", (d) => {
+      this.lastRx = Date.now();
+      if (d && (d.t === "ping" || d.t === "pong")) {
+        this.heard = true;
+        if (d.t === "ping") try { this.conn.send({ t: "pong" }); } catch {}
+        return;
+      }
+      this.dispatchEvent(new CustomEvent("msg", { detail: d }));
+    });
+    this.conn.on("close", () => this.fireClose());
     this.peer.on("disconnected", () => { try { this.peer.reconnect(); } catch {} });
+    this.beat = setInterval(() => {
+      const now = Date.now();
+      if (now - this.lastTick > 8000) this.lastRx = Math.max(this.lastRx, now - 7000);   // we were asleep: give it a moment
+      this.lastTick = now;
+      if (!this.open) return this.fireClose();
+      try { this.conn.send({ t: "ping" }); } catch {}
+      if (this.heard && now - this.lastRx > 15000) this.fireClose();
+    }, 4000);
     if (stream) this.call = this.peer.call(target, stream);
+  }
+  fireClose() {
+    if (this.closed) return;
+    this.closed = true;
+    clearInterval(this.beat);
+    this.dispatchEvent(new Event("close"));
   }
   get open() { return !!(this.conn && this.conn.open); }
   // live view as small JPEGs over the data channel (used with the native camera)
@@ -80,6 +105,8 @@ export class PhoneLink extends EventTarget {
     return true;
   }
   close() {
+    this.closed = true;
+    clearInterval(this.beat);
     this.stopFrames();
     try { this.call && this.call.close(); } catch {}
     try { this.conn && this.conn.close(); } catch {}

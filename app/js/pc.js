@@ -60,29 +60,58 @@ function startPeer(fresh = false) {
       if (++takenTries <= 12) { setStatus("Getting your code back…"); setTimeout(() => startPeer(false), 5000); return; }
       return startPeer(true);                                          // really taken: make a new one
     }
-    if (e.type === "network" || e.type === "server-error" || e.type === "socket-error") setStatus("No connection to link service — retrying", "bad");
+    if (e.type === "network" || e.type === "server-error" || e.type === "socket-error") { setStatus("No connection to link service — retrying", "bad"); setTimeout(checkLink, 3000); }
     else console.warn("peer error", e.type, e);
   });
-  peer.on("disconnected", () => setTimeout(() => { try { peer.reconnect(); } catch {} }, 1500));
-  peer.on("connection", (c) => {
-    if (conn && conn.open) {
-      c.on("open", () => { c.send({ t: "reject", reason: "Another phone is already connected" }); setTimeout(() => c.close(), 800); });
-      return;
-    }
+  const me = peer;
+  me.on("disconnected", () => setTimeout(() => { if (peer === me && !me.destroyed) try { me.reconnect(); } catch {} }, 1500));
+  me.on("close", () => { if (peer === me) setTimeout(() => peer === me && startPeer(false), 3000); });
+  me.on("connection", (c) => {
+    // The newest phone wins: when the phone comes back (screen was off, Wi-Fi dropped, app
+    // restarted) the old link often still looks open here. Refusing it used to force a new QR scan.
+    if (conn && conn !== c) { const old = conn; conn = null; try { old.close(); } catch {} }
     conn = c;
-    c.on("open", () => onConnected());
-    c.on("data", (m) => onMessage(m));
+    c.on("open", () => { if (conn === c) { lastRx = Date.now(); onConnected(); } });
+    c.on("data", (m) => {
+      if (conn !== c) return;
+      lastRx = Date.now();
+      if (m && m.t === "ping") { phoneBeats = true; try { c.send({ t: "pong" }); } catch {} return; }
+      if (m && m.t === "pong") return;
+      onMessage(m);
+    });
     c.on("close", () => { if (conn === c) onDisconnected(); });
     c.on("error", (e) => console.warn("conn error", e));
   });
-  peer.on("call", (call) => {
+  me.on("call", (call) => {
+    try { liveCall && liveCall !== call && liveCall.close(); } catch {}
+    liveCall = call;
     call.answer();
     call.on("stream", (s) => { video.srcObject = s; video.play().catch(() => {}); $("liveEmpty").classList.add("hidden"); });
   });
 }
 $("newcode").onclick = () => startPeer(true);
 
+// Keep the link service connection alive (sleep, Wi-Fi changes): if it is lost, rejoin with the
+// same code so the phone finds this PC again by itself. Also drop a phone link that went silent.
+let lastRx = 0, phoneBeats = false, liveCall = null, lostAt = 0;
+function checkLink() {
+  if (!peer || peer.destroyed) { startPeer(false); return; }
+  if (peer.disconnected) {
+    if (!lostAt) lostAt = Date.now();
+    try { peer.reconnect(); } catch {}
+    if (Date.now() - lostAt > 12000 && !(conn && conn.open)) { lostAt = 0; startPeer(false); }
+  } else lostAt = 0;
+  if (conn && conn.open && phoneBeats && Date.now() - lastRx > 20000) {
+    const c = conn; conn = null; try { c.close(); } catch {}
+    onDisconnected();
+  }
+}
+setInterval(checkLink, 5000);
+window.addEventListener("online", () => setTimeout(checkLink, 500));
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkLink(); });
+
 function onConnected() {
+  setBusy(false);                                   // a capture sent down a dead link is not coming back
   setStatus("Phone connected", "ok");
   $("pair").classList.add("hidden");
   $("session").classList.remove("hidden");
@@ -92,7 +121,7 @@ function onConnected() {
 }
 
 function onDisconnected() {
-  conn = null;
+  conn = null; phoneBeats = false;
   setStatus("Phone disconnected — waiting…", "bad");
   UI.showPhoneStatus("");
   video.srcObject = null;
