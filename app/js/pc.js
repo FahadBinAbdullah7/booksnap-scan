@@ -4,6 +4,7 @@ import * as P from "./imgproc.js";
 import { buildPdf } from "./pdf.js";
 import { PREFIX, newCode, linkUrl } from "./remote.js";
 import * as UI from "./pc-ui.js";
+import { pageViewer } from "./pageview.js";
 
 const $ = (id) => document.getElementById(id);
 const video = $("video"), overlay = $("overlay");
@@ -277,6 +278,7 @@ function capture() {
 $("capture").onclick = capture;
 document.addEventListener("keydown", (e) => {
   if (e.target.closest && e.target.closest("input, select, textarea")) return;
+  if (document.querySelector(".zoomview, .modal-wrap")) return;      // page viewer / a question is open: no photo, no retake
   if (e.code === "Space" || e.code === "Enter" || e.code === "PageDown" || e.code === "ArrowRight") { e.preventDefault(); capture(); }
   else if (e.code === "Backspace" || e.code === "KeyZ") { e.preventDefault(); retake(); }
 });
@@ -294,10 +296,24 @@ $("sync").onclick = () => { autoSync(true); toast("Asking the phone for missing 
 async function deletePage(order) {
   const p = pages.get(order);
   if (!p || !conn || !conn.open) return toast(conn && conn.open ? "Wait until this page has arrived" : "Phone not connected");
-  if (!(await UI.confirmBox(`Delete page ${Math.round(order)}? It is deleted on the phone too, and the pages after it move up one number.`))) return;
+  if (!(await UI.confirmBox(`Remove page ${Math.round(order)}? It is deleted on the phone too, and the pages after it move up one number.`))) return false;
   send({ t: "delete-page", id: p.id });
+  return true;
 }
 UI.onDeletePage(deletePage);
+
+// click a page: look through all pages like a PDF (‹ ›, strip, zoom, ✕ to remove)
+let viewer = null, viewerTimer = null;
+const sortedPages = () => [...pages.entries()].sort((a, b) => a[0] - b[0]).map(([order, p]) => ({ order, blob: p.blob, blurry: p.blurry }));
+UI.onOpenPage((order) => {
+  if (viewer) viewer.close();
+  viewer = pageViewer(order, { list: sortedPages, remove: deletePage, onClose: () => { viewer = null; } });
+});
+function pagesChanged() {
+  if (!viewer) return;
+  clearTimeout(viewerTimer);
+  viewerTimer = setTimeout(() => viewer && viewer.refresh(), 250);
+}
 
 // ---------------------------------------------------------------- saving on this PC
 async function openBookDir() {
@@ -408,6 +424,7 @@ async function setThumb(order, blob, blurry = false) {
   } catch {}
 }
 function updateCounts() {
+  pagesChanged();
   $("counts").textContent = `${pages.size} pages received on this PC · ${state.count} in the book on the phone · filter: ${FILTER_NAMES[state.filter] || state.filter}`;
   $("pdf").disabled = !pages.size;
 }

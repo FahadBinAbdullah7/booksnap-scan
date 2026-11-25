@@ -134,8 +134,9 @@ export function confirmBox(text) {
     m.el.querySelector("#yes").focus();
   });
 }
-let deleter = null;
+let deleter = null, opener = null;
 export function onDeletePage(fn) { deleter = fn; }
+export function onOpenPage(fn) { opener = fn; }
 function alertBox(text) {
   const m = modal(`<p>${esc(text)}</p><div class="row end"><button class="btn primary" id="ok">OK</button></div>`);
   m.el.querySelector("#ok").onclick = () => m.close();
@@ -231,7 +232,7 @@ function setupZoom(send) {
   if (th) th.addEventListener("click", (e) => {
     const f = e.target.closest("figure");
     if (f && e.target.closest(".tdel")) { e.stopPropagation(); if (deleter) deleter(+f.dataset.o); return; }
-    if (f && f._full) zoomViewer(f._full, "Page " + Math.round(+f.dataset.o));
+    if (f && f._full) (opener ? opener(+f.dataset.o) : zoomViewer(f._full, "Page " + Math.round(+f.dataset.o)));
   });
 }
 function rotatedCanvas(src, rot) {
