@@ -716,50 +716,73 @@ async function viewScan(bookId, pcCode = null) {
     <div class="scan">
       <div class="stage"><video class="cam" playsinline muted></video><canvas class="overlay"></canvas><div class="flash"></div></div>
       <div class="scan-top">
-        <button class="chip" id="close" aria-label="Close">✕</button>
-        <button class="chip" id="pc">💻 PC</button>
-        <button class="chip" id="lockbtn">🔓 Lock area</button>
-        <button class="chip" id="delay"></button>
-        <button class="chip hidden" id="pause">⏸ Pause</button>
-        <button class="chip" id="rot" title="Fix sideways photos"></button>
-        <button class="chip" id="zoom" title="Look at a sharp photo up close">🔍 Zoom</button>
-        <button class="chip hidden" id="torch">🔦</button>
-        <button class="chip hidden" id="undo">↶ Retake</button>
+        <div class="tops">
+          <button class="chip" id="close" aria-label="Close">✕</button>
+          <button class="chip" id="pc">💻 PC</button>
+          <button class="chip" id="lockbtn" title="Lock the page area">🔓 Lock</button>
+          <button class="chip hidden" id="pause">⏸ Pause</button>
+          <button class="chip hidden" id="undo">↶ Retake</button>
+        </div>
+        <button class="chip tools-btn" id="tools" aria-expanded="false" title="Pages, screen, Manual / Auto, zoom, light">🧰 <span id="toolsum"></span> ▾</button>
       </div>
-      <div class="scan-opts">
-        <div class="seg" id="segMode"><button data-v="single">📄 1 page</button><button data-v="spread">📖 2 pages</button></div>
-        <div class="seg" id="segOrient"><button data-v="portrait">▯ Portrait</button><button data-v="landscape">▭ Landscape</button></div>
-        <div class="seg" id="segAuto"><button data-v="manual">✋ Manual</button><button data-v="auto" id="auto">🤖 Auto</button></div>
+      <div class="scan-tools hidden" id="toolsPanel">
+        <div class="trow"><span class="tl">Photo has</span><div class="seg" id="segMode"><button data-v="single">📄 1 page</button><button data-v="spread">📖 2 pages</button></div></div>
+        <div class="trow"><span class="tl">Screen</span><div class="seg" id="segOrient"><button data-v="portrait">▯ Portrait</button><button data-v="landscape">▭ Landscape</button></div></div>
+        <div class="trow"><span class="tl">Photos</span><div class="seg" id="segAuto"><button data-v="manual">✋ Manual</button><button data-v="auto" id="auto">🤖 Auto</button></div></div>
+        <div class="trow tchips">
+          <button class="chip" id="delay"></button>
+          <button class="chip" id="rot" title="Fix sideways photos"></button>
+          <button class="chip" id="zoom" title="Look at a sharp photo up close">🔍 Zoom</button>
+          <button class="chip hidden" id="torch">🔦 Light</button>
+        </div>
       </div>
-      <div class="scan-status"><div class="ring"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" class="bg"/><circle cx="18" cy="18" r="15" class="fg" id="ringfg"/></svg></div><span id="status">Starting camera…</span></div>
       <div class="scan-bottom">
-        <button class="last" id="last"><img id="lastimg" alt=""><span id="count">${count}</span></button>
-        <button class="shutter" id="shutter" aria-label="Take photo"><span></span></button>
-        <button class="chip done" id="done">Done</button>
+        <div class="scan-status"><div class="ring"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" class="bg"/><circle cx="18" cy="18" r="15" class="fg" id="ringfg"/></svg></div><span id="status">Starting camera…</span></div>
+        <div class="brow">
+          <button class="last" id="last"><img id="lastimg" alt=""><span id="count">${count}</span></button>
+          <button class="shutter" id="shutter" aria-label="Take photo"><span></span></button>
+          <button class="chip done" id="done">Done</button>
+        </div>
       </div>
     </div>`;
   document.body.classList.add("dark");
   const $ = (s) => app.querySelector(s);
   const video = $(".cam"), overlay = $(".overlay"), statusEl = $("#status"), ringFg = $("#ringfg");
   if (isDoc) {
-    for (const sel of ["#lockbtn", "#delay", "#pc", ".scan-opts"]) $(sel)?.classList.add("hidden");
+    for (const sel of ["#lockbtn", "#delay", "#pc"]) $(sel)?.classList.add("hidden");
+    for (const sel of ["#segMode", "#segOrient", "#segAuto"]) $(sel).closest(".trow").classList.add("hidden");
     $(".scan").classList.add("docscan");
   }
   if (special) {
     for (const sel of ["#delay", "#pc", "#segAuto"]) $(sel)?.classList.add("hidden");
     if (special.kind === "retake") $("#segMode")?.classList.add("hidden");
+    for (const id of ["#segAuto", "#segMode"]) if ($(id)?.classList.contains("hidden")) $(id).closest(".trow").classList.add("hidden");
   }
-  // small phones: the chip row can wrap to 2 lines — keep the option rows below it so no chip is hidden
-  {
-    const top = $(".scan-top"), opts = $(".scan-opts");
-    const place = () => { if (top.isConnected) opts.style.top = top.offsetTop + top.offsetHeight + 8 + "px"; };
-    new ResizeObserver(place).observe(top);
-  }
+  // 🧰 Tools menu (pages, screen, Manual/Auto, zoom, light) — opens under the top bar
+  const toolsPanel = $("#toolsPanel");
+  const showTools = (v) => { toolsPanel.classList.toggle("hidden", !v); $("#tools").setAttribute("aria-expanded", String(v)); $("#tools").classList.toggle("on", v); };
+  $("#tools").onclick = (e) => { e.stopPropagation(); showTools(toolsPanel.classList.contains("hidden")); };
+  $(".stage").addEventListener("pointerdown", () => showTools(false));
   const backTo = () => go(special ? "#/page/" + (special.added[0] || special.pageId) : "#/book/" + bookId);
   const cam = N.isAndroid() ? new NativeCamera() : new Camera(video);
   const prof = await Dev.profile().catch(() => ({}));
   cam.profile = prof;
   if (cam.native) video.classList.add("hidden");
+  // the camera picture sits between the top bar and the bottom bar: no button covers it
+  const layoutStage = () => {
+    if (!app.contains(video)) return;
+    const W = window.innerWidth, H = window.innerHeight;
+    const t = $(".scan-top").getBoundingClientRect(), b = $(".scan-bottom").getBoundingClientRect();
+    const side = b.height > H * 0.6;                     // small landscape screen: the shutter column is on the right
+    const r = { top: Math.round(t.bottom), left: 0, right: side ? Math.round(W - b.left) : 0, bottom: side ? 0 : Math.round(H - b.top) };
+    const st = $(".stage").style;
+    st.top = r.top + "px"; st.left = "0px"; st.right = r.right + "px"; st.bottom = r.bottom + "px";
+    toolsPanel.style.top = r.top + "px"; toolsPanel.style.right = r.right + "px";
+    cam.setRect?.(r);
+  };
+  const layoutObs = new ResizeObserver(() => layoutStage());
+  layoutObs.observe($(".scan-top")); layoutObs.observe($(".scan-bottom")); layoutObs.observe(app);
+  layoutStage();
 
   // tap the picture to focus there (real camera)
   $(".stage").addEventListener("click", (e) => {
@@ -827,7 +850,7 @@ async function viewScan(bookId, pcCode = null) {
   const seg = (id, v) => app.querySelectorAll(`#${id} button`).forEach((b) => b.classList.toggle("active", b.dataset.v === v));
   const labels = () => {
     seg("segMode", mode);
-    $("#lockbtn").textContent = lock ? "🔒 Locked" : "🔓 Lock area";
+    $("#lockbtn").textContent = lock ? "🔒 Locked" : "🔓 Lock";
     $("#lockbtn").classList.toggle("on", !!lock);
     seg("segOrient", orient);
     seg("segAuto", settings.auto ? "auto" : "manual");
@@ -841,6 +864,7 @@ async function viewScan(bookId, pcCode = null) {
     $("#delay").textContent = `⏱ ${settings.delay}s`;
     $("#rot").textContent = `⟳ ${settings.rotate}°`;
     $("#rot").classList.toggle("hidden", !settings.rotate && cam.native);
+    $("#toolsum").textContent = isDoc ? "Tools" : (mode === "spread" ? "📖" : "📄") + (autoOn() ? "🤖" : "✋");
     $("#pc").textContent = remote() ? "💻 Connected" : "💻 PC";
     $("#pc").classList.toggle("on", remote());
   };
@@ -1632,6 +1656,7 @@ async function viewScan(bookId, pcCode = null) {
     try { wake?.release(); } catch {}
     document.removeEventListener("visibilitychange", onVis);
     document.removeEventListener("visibilitychange", onWake);
+    layoutObs.disconnect();
     window.removeEventListener("online", onWake);
     document.body.classList.remove("dark");
   };

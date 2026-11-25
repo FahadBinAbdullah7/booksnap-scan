@@ -192,6 +192,10 @@ export class NativeCamera {
   }
 }
 
+// the camera picture fills only the free area between the scanner bars (CSS px from each edge)
+NativeCamera.prototype.setRect = function (r) { return NC.setPreviewRect(r).catch(() => {}); };
+Camera.prototype.setRect = function () {};
+
 // turn the scanner screen (and so the photos) to portrait/landscape
 NativeCamera.prototype.setOrientation = function (mode) { return NC.setOrientation({ mode }).catch(() => {}); };
 Camera.prototype.setOrientation = async function (mode) {

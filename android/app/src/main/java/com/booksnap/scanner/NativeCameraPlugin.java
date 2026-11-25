@@ -108,6 +108,7 @@ public class NativeCameraPlugin extends Plugin {
                     parent.addView(previewView, 0, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
                     wv.setBackgroundColor(Color.TRANSPARENT);
                 }
+                applyRect();
                 ListenableFuture<ProcessCameraProvider> f = ProcessCameraProvider.getInstance(getContext());
                 f.addListener(() -> {
                     try {
@@ -334,6 +335,41 @@ public class NativeCameraPlugin extends Plugin {
         boolean on = Boolean.TRUE.equals(call.getBoolean("on", false));
         if (camera != null) camera.getCameraControl().enableTorch(on);
         call.resolve();
+    }
+
+    // The camera picture only fills the area between the scanner's top and bottom bars (so the
+    // buttons never cover it). Values are CSS pixels inside the web page.
+    private float rectT = 0, rectL = 0, rectR = 0, rectB = 0;
+
+    @PluginMethod
+    public void setPreviewRect(PluginCall call) {
+        rectT = Math.max(0, call.getFloat("top", 0f));
+        rectL = Math.max(0, call.getFloat("left", 0f));
+        rectR = Math.max(0, call.getFloat("right", 0f));
+        rectB = Math.max(0, call.getFloat("bottom", 0f));
+        getActivity().runOnUiThread(() -> { applyRect(); call.resolve(); });
+    }
+
+    private void applyRect() {
+        if (previewView == null) return;
+        try {
+            WebView wv = getBridge().getWebView();
+            ViewGroup parent = (ViewGroup) previewView.getParent();
+            if (parent == null) return;
+            float d = wv.getResources().getDisplayMetrics().density;
+            int pw = parent.getWidth(), ph = parent.getHeight();
+            int t = wv.getTop() + Math.round(rectT * d);
+            int l = wv.getLeft() + Math.round(rectL * d);
+            int r = (pw > 0 ? pw - wv.getRight() : 0) + Math.round(rectR * d);
+            int b = (ph > 0 ? ph - wv.getBottom() : 0) + Math.round(rectB * d);
+            ViewGroup.LayoutParams lp = previewView.getLayoutParams();
+            if (lp instanceof ViewGroup.MarginLayoutParams) {
+                ViewGroup.MarginLayoutParams m = (ViewGroup.MarginLayoutParams) lp;
+                m.width = ViewGroup.LayoutParams.MATCH_PARENT; m.height = ViewGroup.LayoutParams.MATCH_PARENT;
+                m.setMargins(l, t, r, b);
+                previewView.setLayoutParams(m);
+            }
+        } catch (Exception ignored) {}
     }
 
     @PluginMethod
