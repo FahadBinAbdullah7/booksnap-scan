@@ -2,6 +2,18 @@
 
 An installable web app (PWA) for Android and iPhone. Everything is processed and stored **on the phone**: no server and no uploads.
 
+| | Link |
+|---|---|
+| 🌐 Website (landing page) | https://booksnap-scanner.vercel.app |
+| 📱 Phone web app | https://booksnap-scanner.vercel.app/app |
+| 💻 PC Remote | https://booksnap-scanner.vercel.app/pc |
+| 🔒 Privacy policy | https://booksnap-scanner.vercel.app/privacy |
+| 🤖 Android app (APK) | https://github.com/FahadBinAbdullah7/booksnap-scan/releases/latest |
+
+**Scan:** Book (hands-free Auto, 2-page split), Regular, Card (front + back on one A4), Passport. **PDF tools:** E-sign, Watermark. **Connect:** PC Remote, or receive on another phone.
+
+Website pages: `site.html` (landing, served at `/` and `/home`), `privacy.html` (`/privacy`), `index.html` (phone app, `/app`), `pc.html` (PC Remote, `/pc`). Routes are set in `vercel.json`.
+
 ## What it does
 - **PC remote:** open `pc.html` on the computer and connect the phone by QR code or a 6-letter code. The PC shows the phone camera live. Press **Capture** or **Space** on the PC, and the phone takes the photo, saves it, processes the pages and sends them to the PC. The PC saves them as `0001.jpg`, `0002.jpg`… into a folder you choose (Chrome or Edge), and can make a PDF.
 - **Auto-capture (optional, off by default):** turn the page, it waits until still, then shoots. It is always off while a PC is connected.

@@ -2,7 +2,7 @@
   "name": "BookSnap Book Scanner",
   "short_name": "BookSnap",
   "description": "Scan whole books: auto-capture, two-page split, flattening, Magic Color, PDF.",
-  "start_url": "./",
+  "start_url": "index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",

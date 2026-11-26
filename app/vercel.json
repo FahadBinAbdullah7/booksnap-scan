@@ -2,11 +2,19 @@
   "redirects": [
     {
       "source": "/",
-      "destination": "/pc",
+      "destination": "/home",
       "permanent": false
     }
   ],
   "rewrites": [
+    {
+      "source": "/home",
+      "destination": "/site.html"
+    },
+    {
+      "source": "/privacy",
+      "destination": "/privacy.html"
+    },
     {
       "source": "/pc",
       "destination": "/pc.html"
