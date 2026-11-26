@@ -21,18 +21,36 @@ export async function installedVersion() {
   try { return (await U.info()).version; } catch { return null; }
 }
 
-// latest release on GitHub (cached for a few hours) -> { version, url, notes, size } | null
+// only an APK from this repository's own releases (Android also checks it is signed with our key)
+const okUrl = (u) => typeof u === "string" && u.startsWith(`https://github.com/${REPO}/releases/download/`) && /\.apk$/i.test(u);
+export const WEB_VERSION = "https://booksnap-scanner.vercel.app/version.json";
+
+// 1st: the website's version.json (no limits; published only once the APK is built)
+async function fromWebsite() {
+  const r = await fetch(WEB_VERSION + "?t=" + Date.now(), { cache: "no-store" });
+  if (!r.ok) throw new Error("website " + r.status);
+  const j = await r.json();
+  if (!j || !j.version || !okUrl(j.apk)) throw new Error("website: no APK");
+  return { version: String(j.version).replace(/^v/i, ""), url: j.apk, size: j.size || 0, notes: String(j.notes || "").slice(0, 600) };
+}
+// 2nd: GitHub's API (only 60 checks an hour per internet connection, shared by everyone on that Wi-Fi)
+async function fromGitHub() {
+  const r = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { headers: { Accept: "application/vnd.github+json" }, cache: "no-store" });
+  if (!r.ok) throw new Error("GitHub " + r.status);
+  const j = await r.json();
+  const apk = (j.assets || []).find((a) => okUrl(a.browser_download_url));
+  return apk ? { version: String(j.tag_name || "").replace(/^v/i, ""), url: apk.browser_download_url, size: apk.size, notes: (j.body || "").trim().slice(0, 600) } : null;
+}
+
+// latest release (cached for a few hours) -> { version, url, notes, size } | null
 async function latest(force) {
   let cached = null;
   try { cached = JSON.parse(localStorage.getItem(KEY) || "null"); } catch {}
   if (!force && cached && Date.now() - cached.at < EVERY) return cached.rel;
-  const r = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { headers: { Accept: "application/vnd.github+json" }, cache: "no-store" });
-  if (!r.ok) throw new Error("GitHub " + r.status);
-  const j = await r.json();
-  // only an APK from this repository's own releases (Android also checks it is signed with our key)
-  const ok = (u) => typeof u === "string" && u.startsWith(`https://github.com/${REPO}/releases/download/`);
-  const apk = (j.assets || []).find((a) => /\.apk$/i.test(a.name) && ok(a.browser_download_url));
-  const rel = apk ? { version: String(j.tag_name || "").replace(/^v/i, ""), url: apk.browser_download_url, size: apk.size, notes: (j.body || "").trim().slice(0, 600) } : null;
+  let rel = null, web = null;
+  try { web = await fromWebsite(); } catch {}
+  try { rel = web || (await fromGitHub()); }
+  catch (e) { if (!web) throw e; }
   try { localStorage.setItem(KEY, JSON.stringify({ at: Date.now(), rel })); } catch {}
   return rel;
 }
@@ -65,7 +83,7 @@ const mb = (n) => (n ? ` (${(n / 1048576).toFixed(0)} MB)` : "");
 // banner at the top of `container` when an update is waiting
 export async function banner(container, { force = false, toast } = {}) {
   let rel = null;
-  try { rel = await check(force); } catch (e) { if (force && toast) toast("Could not check for updates — are you online?"); return; }
+  try { rel = await check(force); } catch (e) { if (force && toast) toast("Could not check for updates — check the internet and try again in a few minutes", 5000); return; }
   if (!rel) { if (force && toast) toast("BookSnap is up to date ✓"); return; }
   if (!container || !container.isConnected) return;
   container.querySelector(".update-banner")?.remove();
