@@ -225,6 +225,32 @@ async function route() {
 }
 window.addEventListener("hashchange", route);
 
+// Android Back button (MainActivity asks this): close what is open, else go up one level.
+// "no" on the home screen -> the app closes.
+window.__appBack = () => {
+  const zv = document.querySelector(".zoomview .zv-close");
+  if (zv) { zv.click(); return "yes"; }
+  const wraps = modalRoot.querySelectorAll(".modal-wrap");
+  if (wraps.length) {
+    const w = wraps[wraps.length - 1];
+    const cancel = w.querySelector("#c, #cl, #no, [data-a=later]");
+    if (cancel) cancel.click(); else w.remove();
+    return "yes";
+  }
+  const tp = document.getElementById("toolsPanel");
+  if (tp && !tp.classList.contains("hidden")) { document.getElementById("tools")?.click(); return "yes"; }
+  const [, a, id] = (location.hash.slice(1) || "/").split("/");
+  if (!a) return "no";
+  goUp(a, id);
+  return "yes";
+};
+async function goUp(a, id) {
+  if (a === "page") { const p = await DB.get("pages", id); return go(p ? "#/book/" + p.bookId : "#/"); }
+  if (a === "book" || a === "card") { const b = await DB.get("books", id); return go(b ? "#/kind/" + kindOf(b) : "#/"); }
+  if (a === "scan") { const b = await DB.get("books", id); return go(!b ? "#/" : (CARD_SPEC[b.kind] ? "#/card/" : "#/book/") + id); }
+  go("#/");
+}
+
 // ================================================================ LIBRARY
 // home: only the cards — the scans of each kind are inside its card
 const TOOLS = {
@@ -839,7 +865,7 @@ async function viewScan(bookId, pcCode = null) {
     const leftCol = t.height > H * 0.6;                  // … and the buttons in a column on the left
     const sRect = $(".scan-status").getBoundingClientRect();
     const r = leftCol
-      ? { top: 0, left: Math.round(t.right), right: Math.round(W - b.left), bottom: Math.round(H - sRect.top + 4) }
+      ? { top: 0, left: Math.round(t.right), right: Math.round(W - b.left), bottom: Math.round(H - sRect.top) }
       : { top: Math.round(t.bottom), left: 0, right: side ? Math.round(W - b.left) : 0, bottom: side ? 0 : Math.round(H - b.top) };
     const st = $(".stage").style;
     st.top = r.top + "px"; st.left = r.left + "px"; st.right = r.right + "px"; st.bottom = r.bottom + "px";

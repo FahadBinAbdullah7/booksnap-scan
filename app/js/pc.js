@@ -41,6 +41,15 @@ if (inApp) {
   $("folder").classList.add("hidden");
   $("folderInfo").textContent = "Pages are saved on this phone in Documents/" + RECV + "/<book name>/";
 }
+// Android Back button inside the app: close the page viewer / a question, else back to the app
+window.__appBack = () => {
+  const zv = document.querySelector(".zoomview .zv-close");
+  if (zv) { zv.click(); return "yes"; }
+  const w = [...document.querySelectorAll("#modal-root .modal-wrap")].pop();
+  if (w) { (w.querySelector("#no, #ok") || w).click?.(); if (w.isConnected) w.remove(); return "yes"; }
+  if (inApp) { location.href = "index.html"; return "yes"; }
+  return "no";
+};
 // any browser: keep the screen on while receiving (the app does this by itself)
 let wakeLock = null;
 async function keepAwake(on) {

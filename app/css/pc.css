@@ -124,3 +124,4 @@ kbd.dark { background: var(--line); color: var(--text); }
   .pv-nav { width: 44px; height: 44px; font-size: 28px; }
   .pv-nav.prev { left: 6px; } .pv-nav.next { right: 6px; }
 }
+.pc-main { padding-bottom: calc(16px + var(--safe-b, 0px)); }

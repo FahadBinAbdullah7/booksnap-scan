@@ -1,5 +1,5 @@
 {
-  "version": "1.5.3",
-  "apk": "https://github.com/FahadBinAbdullah7/booksnap-scan/releases/download/v1.5.3/BookSnap-v1.5.3.apk",
-  "notes": "Card scan sideways: bigger camera and frame, message below the picture. E-sign: add text and signature buttons. Watermark at 10%."
+  "version": "1.5.4",
+  "apk": "https://github.com/FahadBinAbdullah7/booksnap-scan/releases/download/v1.5.4/BookSnap-v1.5.4.apk",
+  "notes": "Android Back button works inside the app. Content stays clear of the navigation bar. Sideways scanner fixes. Watermark preview of all pages."
 }

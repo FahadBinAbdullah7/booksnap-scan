@@ -390,8 +390,9 @@ export async function viewWatermark(ui) {
         <div class="seg light" id="dir"><button data-v="diag" class="active">⟋ Diagonal</button><button data-v="flat">— Straight</button></div>
         <span class="muted small">Middle of every page · ${Math.round(WM_OPACITY * 100)}% opacity</span>
       </div>
-      <div class="wm-preview"><canvas id="prev"></canvas><p class="muted small" id="pnote">Choose a PDF to see a preview</p></div>
       <button class="btn primary big" id="make" disabled>💧 Make watermarked PDF</button>
+      <p class="muted small" id="pnote">Choose a PDF to see a preview</p>
+      <div class="wm-pages" id="wmpages"></div>
     </main>`;
   const $ = (q) => app.querySelector(q);
   let dir = "diag";
@@ -399,32 +400,51 @@ export async function viewWatermark(ui) {
   const ready = () => { $("#make").disabled = !(src && $("#text").value.trim()); };
   $("#text").oninput = () => { ready(); preview(); };
 
-  // the first page with the watermark on it
-  let pv = 0;
-  async function preview() {
-    const my = ++pv;
-    const c = $("#prev"), text = $("#text").value.trim();
-    if (!src) return;
-    let base;
+  // every page with the watermark on it, drawn as it scrolls into view
+  let io = null, items = [];
+  async function pageBase(i, width) {
     if (src.kind === "scan") {
-      const b = await DB.getBlob("full:" + src.pages[0].id);
-      base = await createImageBitmap(b);
-    } else {
-      const { pdfjs } = await loadLibs();
-      if (!pdfDoc) pdfDoc = await pdfjs.getDocument({ data: src.bytes.slice() }).promise;
-      const page = await pdfDoc.getPage(1), vp = page.getViewport({ scale: 1 });
-      const vp2 = page.getViewport({ scale: 900 / vp.width });
-      base = document.createElement("canvas"); base.width = vp2.width; base.height = vp2.height;
-      await page.render({ canvasContext: base.getContext("2d"), viewport: vp2 }).promise;
+      const b = await DB.getBlob("full:" + src.pages[i].id);
+      return b ? await createImageBitmap(b, { resizeWidth: width }) : null;
     }
-    if (my !== pv) return;
-    const k = 900 / base.width;
-    c.width = 900; c.height = Math.round(base.height * k);
-    const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height);
-    g.drawImage(base, 0, 0, c.width, c.height);
+    const page = await pdfDoc.getPage(i + 1), vp = page.getViewport({ scale: 1 });
+    const vp2 = page.getViewport({ scale: width / vp.width });
+    const c = document.createElement("canvas"); c.width = Math.round(vp2.width); c.height = Math.round(vp2.height);
+    await page.render({ canvasContext: c.getContext("2d"), viewport: vp2 }).promise;
+    return c;
+  }
+  async function drawItem(it) {
+    const my = (it.ver = (it.ver || 0) + 1);
+    const base = await pageBase(it.i, 640).catch(() => null);
+    if (!base || my !== it.ver) { base && base.close && base.close(); return; }
+    const c = it.c; c.width = base.width; c.height = base.height;
+    const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height); g.drawImage(base, 0, 0);
     if (base.close) base.close();
+    const text = $("#text").value.trim();
     if (text) stampCanvas(g, c.width, c.height, text, dir);
-    $("#pnote").textContent = text ? "Preview of page 1" : "Type the watermark text";
+    it.drawn = true;
+  }
+  async function buildPreview() {
+    if (io) io.disconnect();
+    const holder = $("#wmpages"); holder.innerHTML = ""; items = [];
+    if (!src) return;
+    if (src.kind !== "scan" && !pdfDoc) { const { pdfjs } = await loadLibs(); pdfDoc = await pdfjs.getDocument({ data: src.bytes.slice() }).promise; }
+    const n = src.kind === "scan" ? src.pages.length : pdfDoc.numPages;
+    io = new IntersectionObserver((es) => es.forEach((e) => { const it = items[+e.target.dataset.i]; it.visible = e.isIntersecting; if (e.isIntersecting && !it.drawn) drawItem(it); }), { rootMargin: "500px 0px" });
+    for (let i = 0; i < n; i++) {
+      const w = document.createElement("div"); w.className = "wm-page"; w.dataset.i = i;
+      w.innerHTML = `<canvas></canvas><span class="pgno">${i + 1} / ${n}</span>`;
+      holder.appendChild(w);
+      items.push({ i, w, c: w.querySelector("canvas") });
+      io.observe(w);
+    }
+    $("#pnote").textContent = `Preview of all ${n} page${n > 1 ? "s" : ""} — scroll down`;
+  }
+  // text / direction changed: redraw the pages in view now, the others when they come into view
+  let pvTimer = null;
+  function preview() {
+    clearTimeout(pvTimer);
+    pvTimer = setTimeout(() => items.forEach((it) => { it.drawn = false; if (it.visible) drawItem(it); }), 200);
   }
   $("#open").onclick = async () => {
     const s = await pickSource(ui, "Which PDF gets the watermark?");
@@ -433,7 +453,7 @@ export async function viewWatermark(ui) {
     $("#srcname").textContent = `📄 ${s.name}` + (s.kind === "scan" ? ` · ${s.pages.length} pages (your scan)` : "");
     $("#open").textContent = "📂 Choose another PDF";
     ready();
-    try { await preview(); } catch (e) { ui.toast("Could not open this PDF: " + (e.message || e), 6000); src = null; ready(); }
+    try { await buildPreview(); } catch (e) { ui.toast("Could not open this PDF: " + (e.message || e), 6000); src = null; ready(); }
   };
   $("#make").onclick = async () => {
     const text = $("#text").value.trim();
@@ -483,7 +503,7 @@ export async function viewWatermark(ui) {
       await ui.deliver({ name: src.name }, `${src.name} (watermark).pdf`, blob, "Watermarked");
     } catch (e) { pm.close(); console.error(e); ui.toast("Could not add the watermark: " + (e.message || e), 6000); }
   };
-  return () => { if (pdfDoc) pdfDoc.destroy(); if (prevUrl) URL.revokeObjectURL(prevUrl); };
+  return () => { if (io) io.disconnect(); if (pdfDoc) pdfDoc.destroy(); if (prevUrl) URL.revokeObjectURL(prevUrl); };
 }
 
 // watermark on a page picture: middle of the page, 10 % opacity

@@ -3,6 +3,8 @@ package com.booksnap.scanner;
 import android.os.Bundle;
 import android.view.KeyEvent;
 import android.view.WindowManager;
+import android.webkit.WebView;
+import androidx.activity.OnBackPressedCallback;
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
@@ -14,6 +16,26 @@ public class MainActivity extends BridgeActivity {
         super.onCreate(savedInstanceState);
         // keep the screen on while BookSnap is open (long scanning sessions)
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
+        // Android's Back button works like the app's own ‹ button: the page closes an open window
+        // or goes up one level (window.__appBack answers "yes"); on the home screen the app closes.
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                WebView wv = getBridge() != null ? getBridge().getWebView() : null;
+                if (wv == null) { exitApp(this); return; }
+                wv.evaluateJavascript("(function(){try{return window.__appBack?window.__appBack():'no'}catch(e){return 'no'}})()", (v) -> {
+                    if (v != null && v.contains("yes")) return;
+                    exitApp(this);
+                });
+            }
+        });
+    }
+
+    private void exitApp(OnBackPressedCallback cb) {
+        cb.setEnabled(false);
+        getOnBackPressedDispatcher().onBackPressed();
+        cb.setEnabled(true);
     }
 
     @Override

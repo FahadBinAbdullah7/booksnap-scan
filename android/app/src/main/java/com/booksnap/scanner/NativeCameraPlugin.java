@@ -106,6 +106,7 @@ public class NativeCameraPlugin extends Plugin {
                     WebView wv = getBridge().getWebView();
                     ViewGroup parent = (ViewGroup) wv.getParent();
                     parent.addView(previewView, 0, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+                    parent.setBackgroundColor(Color.BLACK);          // around the picture: black, never the white window
                     wv.setBackgroundColor(Color.TRANSPARENT);
                 }
                 applyRect();
@@ -380,7 +381,7 @@ public class NativeCameraPlugin extends Plugin {
             if (previewView != null) {
                 previewView.removeCallbacks(frameTask);
                 ViewGroup parent = (ViewGroup) previewView.getParent();
-                if (parent != null) parent.removeView(previewView);
+                if (parent != null) { parent.removeView(previewView); parent.setBackgroundColor(Color.TRANSPARENT); }
                 previewView = null;
             }
             camera = null;
