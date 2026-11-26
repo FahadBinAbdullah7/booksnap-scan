@@ -836,14 +836,18 @@ async function viewScan(bookId, pcCode = null) {
     const W = window.innerWidth, H = window.innerHeight;
     const t = $(".scan-top").getBoundingClientRect(), b = $(".scan-bottom").getBoundingClientRect();
     const side = b.height > H * 0.6;                     // small landscape screen: the shutter column is on the right
-    const r = { top: Math.round(t.bottom), left: 0, right: side ? Math.round(W - b.left) : 0, bottom: side ? 0 : Math.round(H - b.top) };
+    const leftCol = t.height > H * 0.6;                  // … and the buttons in a column on the left
+    const sRect = $(".scan-status").getBoundingClientRect();
+    const r = leftCol
+      ? { top: 0, left: Math.round(t.right), right: Math.round(W - b.left), bottom: Math.round(H - sRect.top + 4) }
+      : { top: Math.round(t.bottom), left: 0, right: side ? Math.round(W - b.left) : 0, bottom: side ? 0 : Math.round(H - b.top) };
     const st = $(".stage").style;
-    st.top = r.top + "px"; st.left = "0px"; st.right = r.right + "px"; st.bottom = r.bottom + "px";
-    toolsPanel.style.top = r.top + "px"; toolsPanel.style.right = r.right + "px";
+    st.top = r.top + "px"; st.left = r.left + "px"; st.right = r.right + "px"; st.bottom = r.bottom + "px";
+    toolsPanel.style.top = r.top + "px"; toolsPanel.style.right = r.right + "px"; toolsPanel.style.left = leftCol ? r.left + "px" : "";
     cam.setRect?.(r);
   };
   const layoutObs = new ResizeObserver(() => layoutStage());
-  layoutObs.observe($(".scan-top")); layoutObs.observe($(".scan-bottom")); layoutObs.observe(app);
+  layoutObs.observe($(".scan-top")); layoutObs.observe($(".scan-bottom")); layoutObs.observe($(".scan-status")); layoutObs.observe(app);
   layoutStage();
 
   // tap the picture to focus there (real camera)
@@ -880,8 +884,8 @@ async function viewScan(bookId, pcCode = null) {
     if (!w || !h) return null;
     const r = effRotate() % 180 ? 1 : 0, W = r ? h : w, H = r ? w : h;
     const A = cardSpec.w / cardSpec.h;
-    let fw = W * 0.86, fh = fw / A;
-    if (fh > H * 0.8) { fh = H * 0.8; fw = fh * A; }
+    let fw = W * 0.92, fh = fw / A;
+    if (fh > H * 0.9) { fh = H * 0.9; fw = fh * A; }
     const x0 = (W - fw) / 2 / W, x1 = 1 - x0, y0 = (H - fh) / 2 / H, y1 = 1 - y0;
     // plain: the card exactly as framed (no trimming, no tilt fix, no line straightening)
     return { mode: "single", pts: [[x0, y0], [x1, y0], [x1, y1], [x0, y1]], plain: true };

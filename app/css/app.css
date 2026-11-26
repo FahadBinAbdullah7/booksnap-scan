@@ -151,8 +151,16 @@ button:disabled { opacity: .35; }
   .scan-bottom { top: 0; left: auto; width: 120px; justify-content: center;
     padding: 12px calc(12px + env(safe-area-inset-right, 0px)) 12px 12px; }
   .scan-bottom .brow { flex-direction: column; gap: 22px; }
-  .scan-top { right: 120px; }
-  .scan-status { position: fixed; bottom: 12px; left: calc(50% - 60px); transform: translateX(-50%); margin: 0; background: rgba(15,23,42,.8); max-width: 60vw; }
+  /* phone held sideways: buttons in a slim column on the left, the camera gets the full height */
+  .scan-top { top: 0; bottom: 0; right: auto; width: 104px; flex-direction: column; align-items: stretch; gap: 8px;
+    padding: calc(8px + var(--safe-t)) 8px 8px calc(8px + env(safe-area-inset-left, 0px)); overflow-y: auto; }
+  .scan-top .tops { flex: none; flex-direction: column; overflow: visible; gap: 8px; }
+  .scan-top .chip { width: 100%; text-align: center; padding: 8px 6px; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; }
+  .scan-top #close { width: 44px; align-self: flex-start; }
+  .scan-top .tools-btn { margin-top: auto; }
+  /* status: a strip under the picture, between the two columns (never over the camera) */
+  .scan-status { position: fixed; bottom: 6px; left: 112px; right: 128px; margin: 0; justify-content: center; background: rgba(255,255,255,.08); max-width: none; padding: 5px 12px 5px 5px; }
+  .scan-status .ring { width: 26px; height: 26px; }
 }
 
 /* ---------- modals */

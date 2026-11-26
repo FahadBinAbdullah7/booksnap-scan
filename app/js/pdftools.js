@@ -225,6 +225,26 @@ export async function viewEsign(ui) {
   return () => stop();
 }
 
+// text to place on the page
+function textDialog(ui) {
+  return new Promise((resolve) => {
+    const m = ui.modal(`<h3>📝 Add text</h3>
+      <input class="input" id="t" maxlength="120" placeholder="e.g. your name, Approved, a note">
+      <div class="row sig-opts">
+        <div class="seg light" id="ink"><button data-c="#111827" class="active">⚫ Black</button><button data-c="#1d4ed8">🔵 Blue</button><button data-c="#b91c1c">🔴 Red</button></div>
+        <label class="check"><input type="checkbox" id="b"> Bold</label>
+      </div>
+      <div class="row end"><button class="btn" id="c">Cancel</button><button class="btn primary" id="o">Add</button></div>`);
+    let color = "#111827";
+    const inp = m.el.querySelector("#t"); setTimeout(() => inp.focus(), 50);
+    m.el.querySelector("#ink").onclick = (e) => { const b = e.target.closest("button"); if (!b) return; color = b.dataset.c; m.el.querySelectorAll("#ink button").forEach((x) => x.classList.toggle("active", x === b)); };
+    const ok = () => { const t = inp.value.trim(); if (!t) return ui.toast("Type the text first"); m.close(); resolve({ text: t, color, bold: m.el.querySelector("#b").checked }); };
+    m.el.querySelector("#o").onclick = ok;
+    inp.onkeydown = (e) => { if (e.key === "Enter") ok(); };
+    m.el.querySelector("#c").onclick = () => { m.close(); resolve(null); };
+  });
+}
+
 async function signEditor(ui, bytes, name) {
   const { app } = ui;
   const { PDFLib, pdfjs } = await loadLibs();
@@ -232,8 +252,10 @@ async function signEditor(ui, bytes, name) {
   app.innerHTML = `
     <header class="bar"><a class="icon" href="#/esign" aria-label="Back" id="back">‹</a><div class="title">✍️ ${ui.esc(name)}</div></header>
     <div class="tool-bar">
-      <button class="btn small" id="mysig">✍️ My signature</button>
-      <button class="btn small" id="adddate">📅 Add date</button>
+      <button class="btn small primary" id="addsig">＋ Add signature</button>
+      <button class="btn small" id="addtext">📝 Add text</button>
+      <button class="btn small" id="adddate">📅 Date</button>
+      <button class="btn small" id="mysig">✍️ Change signature</button>
       <span class="muted small" id="tip">Tap a page to place your signature</span>
     </div>
     <main class="tool pages" id="pages"></main>
@@ -243,7 +265,7 @@ async function signEditor(ui, bytes, name) {
   const view = await showPages(ui, holder, pdf, holder.clientWidth);
   let sig = loadSign();
   const marks = [];          // { page, fx, fy, fw, fh, src (dataURL), el }
-  const updateMake = () => { app.querySelector("#make").disabled = !marks.length; app.querySelector("#tip").textContent = marks.length ? `${marks.length} placed · drag to move, ◢ to resize, ✕ to remove` : sig ? "Tap a page to place your signature" : "First make your signature (✍️ My signature)"; };
+  const updateMake = () => { app.querySelector("#make").disabled = !marks.length; app.querySelector("#tip").textContent = marks.length ? `${marks.length} placed · drag to move, ◢ to resize, ✕ to remove` : "Tap a page (or ＋ Add signature) to place your signature"; };
   updateMake();
 
   async function ensureSig() { if (!sig) sig = await signaturePad(ui); updateMake(); return sig; }
@@ -301,14 +323,31 @@ async function signEditor(ui, bytes, name) {
     const r = w.getBoundingClientRect();
     addMark(+w.dataset.i, s, (e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height, 0.3);
   });
-  // 📅 today's date, placed in the middle of the page most in view
-  app.querySelector("#adddate").onclick = () => {
-    const d = new Date().toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" });
-    const c = textPicture(d, { px: 90, color: "#111827", bold: false });
+  // the page most in view (signature / text / date buttons put things there)
+  const pageInView = () => {
     const mid = innerHeight / 2;
     let best = 0, bd = 1e9;
     view.wraps.forEach((o, i) => { const r = o.w.getBoundingClientRect(); const dd = Math.abs((r.top + r.bottom) / 2 - mid); if (dd < bd) { bd = dd; best = i; } });
-    addMark(best, c.toDataURL("image/png"), 0.5, 0.5, 0.25);
+    return best;
+  };
+  app.querySelector("#addsig").onclick = async () => {
+    const s = await ensureSig(); if (!s) return;
+    addMark(pageInView(), s, 0.5, 0.75, 0.3);
+    ui.toast("Signature added — drag it to its place, ◢ to resize");
+  };
+  // 📝 any text (name, title, "Approved", …) in black or blue
+  app.querySelector("#addtext").onclick = async () => {
+    const r = await textDialog(ui);
+    if (!r) return;
+    const c = textPicture(r.text, { px: 90, color: r.color, bold: r.bold });
+    addMark(pageInView(), c.toDataURL("image/png"), 0.5, 0.5, Math.min(0.8, 0.04 + r.text.length * 0.022));
+    ui.toast("Text added — drag it to its place, ◢ to resize");
+  };
+  // 📅 today's date
+  app.querySelector("#adddate").onclick = () => {
+    const d = new Date().toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" });
+    const c = textPicture(d, { px: 90, color: "#111827", bold: false });
+    addMark(pageInView(), c.toDataURL("image/png"), 0.5, 0.5, 0.25);
     ui.toast("Date added — drag it where it belongs");
   };
 
@@ -336,7 +375,7 @@ async function signEditor(ui, bytes, name) {
 }
 
 // ================================================================ 💧 WATERMARK
-const WM_OPACITY = 0.15;
+const WM_OPACITY = 0.10;
 export async function viewWatermark(ui) {
   const { app } = ui;
   let src = null, pdfDoc = null, prevUrl = null;
@@ -447,7 +486,7 @@ export async function viewWatermark(ui) {
   return () => { if (pdfDoc) pdfDoc.destroy(); if (prevUrl) URL.revokeObjectURL(prevUrl); };
 }
 
-// watermark on a page picture: middle of the page, 15 % opacity
+// watermark on a page picture: middle of the page, 10 % opacity
 function stampCanvas(g, W, H, text, dir) {
   const pic = textPicture(text, { px: 220, color: "#000" });
   const ang = dir === "diag" ? -Math.atan2(H, W) : 0;
