@@ -100,3 +100,27 @@ kbd.dark { background: var(--line); color: var(--text); }
 /* ↻ Retaken mark (PC thumbnails and the page viewer strip) */
 .thumbs figure.retaken::before { content: "↻ Retaken"; position: absolute; right: 4px; bottom: 4px; z-index: 1; background: #2563eb; color: #fff; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 99px; }
 .pv-th.retaken::after { content: "↻"; position: absolute; right: 2px; top: 2px; width: 16px; height: 16px; border-radius: 50%; background: #2563eb; color: #fff; font-size: 11px; line-height: 16px; text-align: center; }
+
+/* ---------- phone as the receiver (BookSnap app or a phone browser) */
+#backApp { margin-right: 4px; font-size: 18px; padding: 4px 12px; }
+@media (max-width: 900px) {
+  /* not connected yet: the QR code first */
+  .pc-main:has(#pair:not(.hidden)) .side { order: -1; }
+}
+@media (max-width: 640px) {
+  .pc-main { padding: 10px; gap: 12px; }
+  .pc .bar .tag { display: none; }
+  .pill { font-size: 12px; padding: 5px 10px; }
+  .live { max-height: 52vh; border-radius: 12px; }
+  .controls { gap: 8px; }
+  .controls .btn, .controls .seg button { font-size: 13px; }
+  /* big Capture button, always at hand at the bottom of the screen */
+  .btn.capture { order: -1; flex: 1 1 100%; position: sticky; bottom: calc(10px + var(--safe-b, 0px)); z-index: 5; font-size: 20px; padding: 16px; box-shadow: 0 6px 20px rgba(0,0,0,.25); }
+  kbd, .hint { display: none; }
+  .qr { width: 200px; }
+  .code { font-size: 28px; letter-spacing: 4px; }
+  .thumbs { max-height: 70vh; gap: 6px; }
+  .pageview .pv-hbtn { padding: 7px 10px; font-size: 13px; }
+  .pv-nav { width: 44px; height: 44px; font-size: 28px; }
+  .pv-nav.prev { left: 6px; } .pv-nav.next { right: 6px; }
+}

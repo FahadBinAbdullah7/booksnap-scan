@@ -40,6 +40,10 @@ export async function saveBlob(path, blob, onProgress) {
   return uri;
 }
 
+export async function deleteFile(path) {
+  try { await Filesystem.deleteFile({ path, directory: DIR }); } catch {}
+}
+
 export async function shareFiles(uris, title) {
   await Share.share({ title, dialogTitle: title, files: uris });
 }

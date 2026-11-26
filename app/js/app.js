@@ -211,6 +211,7 @@ async function viewLibrary() {
   const nDoc = all.filter(({ b }) => b.kind === "doc").length, nBook = all.length - nDoc;
   app.innerHTML = `
     <header class="bar"><div class="brand"><span class="logo">📚</span> BookSnap</div><div style="flex:1"></div>
+      <button class="btn small recv-btn" id="recv" title="Use this phone as the receiver: another phone scans, the pages arrive here">📥 Receive</button>
       <button class="icon" id="help" aria-label="How to use">?</button></header>
     <main class="lib">
       ${N.isAndroid() ? `<div class="updrow"><span id="appver" class="muted small"></span><button class="btn small" id="chkupd">⬆ Check for updates</button></div>` : ""}
@@ -250,6 +251,7 @@ async function viewLibrary() {
     const b = await DB.createBook(name, "doc");
     go("#/scan/" + b.id);
   };
+  app.querySelector("#recv").onclick = () => { location.href = "pc.html"; };
   app.querySelector("#help").onclick = showHelp;
   if (!settings.seenHelp) { settings.seenHelp = true; saveSettings(); showHelp(); }
   // Android app: offer new versions from GitHub
@@ -720,7 +722,9 @@ async function viewScan(bookId, pcCode = null) {
   // retake: same settings as the original photo — a left/right page of a 2-page photo is taken
   // in 2-page mode with the book's locked area, and only that side is kept (same crop as before)
   const retakeSide = special && special.kind === "retake" && (special.side === "L" || special.side === "R") ? special.side : null;
-  let mode = isDoc ? "single" : special && special.kind === "retake" ? (retakeSide ? "spread" : "single") : book.mode || "spread";
+  // retake starts as 1 page, portrait, page found automatically — change it if needed (this retake only)
+  const isRetakeShot = !!(special && special.kind === "retake");
+  let mode = isDoc || isRetakeShot ? "single" : book.mode || "spread";
   let count = await DB.countPages(bookId);
 
   app.innerHTML = `
@@ -766,7 +770,7 @@ async function viewScan(bookId, pcCode = null) {
   }
   if (special) {
     for (const sel of ["#delay", "#pc", "#segAuto"]) $(sel)?.classList.add("hidden");
-    if (special.kind === "retake" && !retakeSide) $("#segMode")?.classList.add("hidden");
+
     for (const id of ["#segAuto", "#segMode"]) if ($(id)?.classList.contains("hidden")) $(id).closest(".trow").classList.add("hidden");
   }
   // 🧰 Tools menu (pages, screen, Manual/Auto, zoom, light) — opens under the top bar
@@ -815,11 +819,14 @@ async function viewScan(bookId, pcCode = null) {
   const remote = () => !!(link && link.open);
   const autoOn = () => !!settings.auto && !isDoc && !special;
   // Portrait / Landscape (per book). Landscape is the natural choice for 2 pages per photo.
-  let orient = book.orient || "portrait";
+  let orient = isRetakeShot ? "portrait" : book.orient || "portrait";
   // locked page area (set once, reused for every photo until unlocked)
   // regular scan: the whole photo, every time (a fixed full-frame area, marked "plain")
   const FULL = { mode: "single", pts: [[0, 0], [1, 0], [1, 1], [0, 1]], plain: true };
-  let lock = isDoc ? FULL : book.lock && book.lock.mode === mode ? book.lock : null;
+  // retake / add page: a lock set here is only for these photos (the book keeps its own)
+  const tmpLocks = {};
+  const bookLock = () => (mode in tmpLocks ? tmpLocks[mode] : isRetakeShot ? null : book.lock && book.lock.mode === mode ? book.lock : null);
+  let lock = isDoc ? FULL : isRetakeShot ? null : bookLock();
   // web version: a sideways video in landscape mode is turned upright here; the app turns the screen instead
   const effRotate = () => ((cam.native ? 0 : orient === "landscape" && cam.size.h > cam.size.w ? 90 : 0) + settings.rotate) % 360;
   // auto mode: page-number check
@@ -917,17 +924,17 @@ async function viewScan(bookId, pcCode = null) {
   };
   const setOrient = async (o) => {
     orient = o;
-    book = { ...book, orient };
+    if (!special) book = { ...book, orient };       // retake / add page: this time only
     labels();
     cam.setOrientation && cam.setOrientation(orient);
-    await DB.saveBook(book);
+    if (!special) await DB.saveBook(book);
     sendState();
   };
   $("#segMode").onclick = async (e) => {
     const v = e.target.closest("button")?.dataset.v;
     if (!v || v === mode) return;
     await setMode(v);
-    lock = book.lock && book.lock.mode === mode ? book.lock : null;
+    lock = isDoc ? FULL : bookLock();
     labels();
     toast(mode === "spread" ? "2 pages per photo (left page first, then right)" : "1 page per photo");
   };
@@ -998,7 +1005,8 @@ async function viewScan(bookId, pcCode = null) {
 
   async function setLock(pts) {
     lock = pts ? { mode, pts } : null;
-    book = await DB.saveBook({ ...book, lock });
+    if (special) tmpLocks[mode] = lock;
+    else book = await DB.saveBook({ ...book, lock });
     if (lock) geo = P.geoFromLock(lock);
     labels(); sendState(); drawOverlay();
   }
@@ -1687,7 +1695,7 @@ async function viewScan(bookId, pcCode = null) {
     if (cam.canTorch) $("#torch").classList.remove("hidden");
     getWake();
     DB.askPersist();
-    setStatus(special ? (special.kind === "retake" ? (retakeSide ? `Retake page ${special.num} (${retakeSide === "L" ? "left" : "right"} page): point at the open book and tap the button — only that page is kept` : `Retake page ${special.num}: point at the page and tap the button`)
+    setStatus(special ? (special.kind === "retake" ? `Retake page ${special.num}: point at the page and tap the button (1 page · Portrait — change in 🧰 if needed)`
       : `Add pages after page ${special.num}: tap the button for each photo`)
       : autoOn() ? "Auto: ready — the photo is taken a moment after each page turn" : "Tap the button to shoot");
     if (special) savedAt = performance.now() + 60000;          // keep the instruction on screen

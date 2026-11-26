@@ -12,7 +12,8 @@
 </head>
 <body class="pc">
   <header class="bar">
-    <div class="brand"><span class="logo">📚</span> BookSnap <span class="tag">PC Remote</span></div>
+    <a class="btn small hidden" id="backApp" href="index.html" aria-label="Back to the app">‹</a>
+    <div class="brand"><span class="logo">📚</span> BookSnap <span class="tag" id="tag">PC Remote</span></div>
     <div class="spacer"></div>
     <span class="pill" id="status">Starting…</span>
   </header>
@@ -52,11 +53,11 @@
         <h3>Connect your phone</h3>
         <div class="qr" id="qr"></div>
         <ol class="steps">
-          <li>Open <b>BookSnap</b> on your phone, open a book and tap <b>💻 PC</b>.</li>
+          <li id="step1">Open <b>BookSnap</b> on your phone, open a book and tap <b>💻 PC</b>.</li>
           <li>Point the phone at this QR code.<br><span class="muted">Or type this code in the app (💻 PC → type the code):</span></li>
         </ol>
         <div class="code" id="code">······</div>
-        <p class="muted small">This code stays the same on this computer — the phone remembers it and reconnects by itself next time.</p>
+        <p class="muted small" id="codeNote">This code stays the same on this computer — the phone remembers it and reconnects by itself next time.</p>
         <button class="btn small" id="newcode">New code</button>
       </div>
 
@@ -73,7 +74,7 @@
       </div>
 
       <div class="card thumbs-card hidden" id="thumbsCard">
-        <h3>Latest pages</h3>
+        <h3>All pages <span class="muted" id="thumbsN"></span> <span class="muted small">· newest first</span></h3>
         <div class="thumbs" id="thumbs"></div>
       </div>
     </aside>

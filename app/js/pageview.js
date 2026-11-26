@@ -82,6 +82,16 @@ export function pageViewer(startOrder, { list, remove, onClose = () => {} }) {
     try { await remove(order); } finally { removing = false; }
   }
 
+  // touch: swipe left / right for the next / previous page (when not zoomed in)
+  let sw = null;
+  stage.addEventListener("pointerdown", (e) => { sw = e.isPrimary && z.scale === 1 ? { x: e.clientX, y: e.clientY, t: Date.now() } : null; });
+  stage.addEventListener("pointercancel", () => { sw = null; });
+  stage.addEventListener("pointerup", (e) => {
+    if (!sw || z.scale !== 1) return;
+    const dx = e.clientX - sw.x, dy = e.clientY - sw.y;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > 1.5 * Math.abs(dy) && Date.now() - sw.t < 800) show(i + (dx < 0 ? 1 : -1));
+    sw = null;
+  });
   $("pvPrev").onclick = (e) => { e.stopPropagation(); show(i - 1); };
   $("pvNext").onclick = (e) => { e.stopPropagation(); show(i + 1); };
   $("pvDel").onclick = del;

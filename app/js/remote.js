@@ -9,7 +9,11 @@ export function newCode(n = 6) {
   return [...a].map((v) => ALPHABET[v % ALPHABET.length]).join("");
 }
 // phone link inside the QR code: /app on the website (Vercel shortens /index.html), index.html elsewhere
-export const linkUrl = (code) => new URL((location.pathname.endsWith(".html") ? "index.html" : "app") + "#/link/" + code, location.href).href;
+// (inside the Android app the page runs on https://localhost: the QR then points at the website,
+//  so any phone camera can open it — the BookSnap scanner reads just the code from it)
+const inNativeApp = () => { try { return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()); } catch { return false; } };
+export const linkUrl = (code) => inNativeApp() ? "https://booksnap-scanner.vercel.app/app#/link/" + code
+  : new URL((location.pathname.endsWith(".html") ? "index.html" : "app") + "#/link/" + code, location.href).href;
 export const codeFromText = (t) => {
   const m = String(t).match(/#\/link\/([A-Za-z0-9]+)/);
   return normCode(m ? m[1] : t);

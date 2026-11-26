@@ -5,6 +5,7 @@ import { buildPdf } from "./pdf.js";
 import { PREFIX, newCode, linkUrl } from "./remote.js";
 import * as UI from "./pc-ui.js";
 import { pageViewer } from "./pageview.js";
+import * as N from "./native.js";
 
 const $ = (id) => document.getElementById(id);
 const video = $("video"), overlay = $("overlay");
@@ -26,6 +27,29 @@ function toast(msg, ms = 2500) {
   setTimeout(() => t.classList.add("out"), ms);
   setTimeout(() => t.remove(), ms + 400);
 }
+// Inside the BookSnap app (another phone is the receiver): pages go straight into
+// Documents/BookSnap/Received/<book>/ on this phone, PDFs too (then the share sheet opens).
+const inApp = N.isNative();
+const RECV = "BookSnap/Received";
+if (inApp) {
+  document.body.classList.add("in-app");
+  $("backApp").classList.remove("hidden");
+  $("tag").textContent = "Receiver";
+  document.title = "BookSnap Receiver";
+  $("step1").innerHTML = "On the <b>scanning phone</b> open BookSnap, open a book and tap <b>💻 PC</b>.";
+  $("codeNote").textContent = "This code stays the same on this phone — the scanning phone remembers it and reconnects by itself.";
+  $("folder").classList.add("hidden");
+  $("folderInfo").textContent = "Pages are saved on this phone in Documents/" + RECV + "/<book name>/";
+}
+// any browser: keep the screen on while receiving (the app does this by itself)
+let wakeLock = null;
+async function keepAwake(on) {
+  try {
+    if (on && !wakeLock && "wakeLock" in navigator && document.visibilityState === "visible") { wakeLock = await navigator.wakeLock.request("screen"); wakeLock.addEventListener("release", () => { wakeLock = null; }); }
+    if (!on && wakeLock) { await wakeLock.release(); wakeLock = null; }
+  } catch {}
+}
+document.addEventListener("visibilitychange", () => { if (conn && conn.open) keepAwake(true); });
 const pad = (n) => String(Math.round(n)).padStart(4, "0");
 const safeName = (s) => (String(s || "Book").replace(/[\\/:*?"<>|]+/g, " ").trim() || "Book").slice(0, 80);
 
@@ -130,6 +154,7 @@ window.addEventListener("online", () => setTimeout(checkLink, 500));
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkLink(); });
 
 function onConnected() {
+  keepAwake(true);
   setBusy(false);                                   // a capture sent down a dead link is not coming back
   setStatus("Phone connected", "ok");
   $("pair").classList.add("hidden");
@@ -149,6 +174,7 @@ function autoSync(manual = false) {
 
 function onDisconnected() {
   conn = null; phoneBeats = false;
+  keepAwake(false);
   setStatus("Phone disconnected — waiting…", "bad");
   UI.showPhoneStatus("");
   video.srcObject = null;
@@ -193,7 +219,8 @@ async function onMessage(m) {
       UI.rotateLive(state.rotate);
       $("filter").value = state.filter;
       $("torch").classList.toggle("hidden", !state.torch);
-      if (bookChanged) { pages.clear(); $("thumbs").innerHTML = ""; bookDir = null; if (rootDir) await openBookDir(); if (state.book) scheduleSync(); }
+      if (bookChanged) { pages.clear(); $("thumbs").innerHTML = ""; bookDir = null; if (rootDir) await openBookDir();
+        if (inApp) { bookDirName = safeName(state.book); $("folderInfo").textContent = `Saving on this phone: Documents/${RECV}/${bookDirName}/`; } if (state.book) scheduleSync(); }
       updateCounts();
       break;
     }
@@ -345,13 +372,17 @@ if (!window.showDirectoryPicker) {
 }
 
 async function removeFile(path) {
+  if (inApp) { if (bookDirName) await N.deleteFile(`${RECV}/${bookDirName}/${path}`); return; }
   if (!bookDir) return;
   try { await bookDir.removeEntry(path); } catch {}
 }
 
 async function saveFile(path, blob) {
   try {
-    if (bookDir) {
+    if (inApp) {
+      if (!bookDirName) bookDirName = safeName(state.book);
+      await N.saveBlob(`${RECV}/${bookDirName}/${path}`, blob);
+    } else if (bookDir) {
       const parts = path.split("/");
       let d = bookDir;
       for (const p of parts.slice(0, -1)) d = await d.getDirectoryHandle(p, { create: true });
@@ -379,16 +410,22 @@ $("pdf").onclick = async () => {
   try {
     const pdf = await buildPdf(list, { title: state.book });
     const name = safeName(state.book) + ".pdf";
-    if (bookDir) { await saveFile(name, pdf); toast("Saved " + name + " in the folder"); }
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(pdf); a.download = name; a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+    if (inApp) {
+      const uri = await N.saveBlob(`${RECV}/${name}`, pdf);
+      toast(`Saved Documents/${RECV}/${name}`, 4000);
+      N.shareFiles([uri], name).catch(() => {});
+    } else {
+      if (bookDir) { await saveFile(name, pdf); toast("Saved " + name + " in the folder"); }
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(pdf); a.download = name; a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+    }
   } catch (e) { toast("PDF failed: " + e.message, 4000); }
   $("pdf").disabled = false; $("pdf").textContent = "⬇ Make PDF";
 };
 
 // ---------------------------------------------------------------- thumbnails (newest first, capped)
-const MAX_THUMBS = 60;
+const MAX_THUMBS = 100000;          // every page (thumbnails are small); the list scrolls
 function figFor(order) {
   let f = $("thumbs").querySelector(`[data-o="${order}"]`);
   if (!f) {
@@ -426,6 +463,7 @@ async function setThumb(order, blob, blurry = false, retaken = false) {
 }
 function updateCounts() {
   pagesChanged();
+  $("thumbsN").textContent = pages.size ? `(${pages.size})` : "";
   $("counts").textContent = `${pages.size} pages received on this PC · ${state.count} in the book on the phone · filter: ${FILTER_NAMES[state.filter] || state.filter}`;
   $("pdf").disabled = !pages.size;
 }
