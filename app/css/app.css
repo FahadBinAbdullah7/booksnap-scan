@@ -350,3 +350,33 @@ a.mode-card { text-decoration: none; }
 .wm-preview { background: rgba(100,116,139,.12); border-radius: 16px; padding: 14px; text-align: center; }
 .wm-preview canvas { max-width: 100%; max-height: 60vh; background: #fff; box-shadow: 0 6px 20px rgba(15,23,42,.18); }
 .wm-preview canvas[width="300"] { display: none; }
+
+/* ---------- home (v2): clean cards; each opens its own page */
+.home { padding-top: 8px; }
+.home-h { font-size: 13px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 18px 4px 10px; }
+.hgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.hcard { position: relative; display: flex; flex-direction: column; gap: 12px; padding: 16px; min-height: 150px; border-radius: 20px; text-decoration: none; color: var(--text);
+  background: var(--card); border: 1px solid var(--line); box-shadow: 0 1px 2px rgba(15,23,42,.04), 0 6px 18px rgba(15,23,42,.06);
+  transition: transform .15s ease, box-shadow .15s ease; -webkit-tap-highlight-color: transparent; }
+.hcard:hover { box-shadow: 0 2px 4px rgba(15,23,42,.06), 0 12px 28px rgba(15,23,42,.10); transform: translateY(-1px); }
+.hcard:active { transform: scale(.98); }
+.hc-icon { width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; font-size: 25px; color: #fff; box-shadow: 0 6px 14px rgba(15,23,42,.16); }
+.hc-body { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+.hc-title { font-size: 16px; font-weight: 750; letter-spacing: -.01em; }
+.hc-sub { font-size: 12.5px; line-height: 1.35; color: var(--muted); }
+.hc-meta { margin-top: auto; padding-top: 8px; font-size: 12px; font-weight: 650; color: var(--accent); }
+.hc-go { position: absolute; top: 18px; right: 16px; font-size: 22px; line-height: 1; color: var(--muted); opacity: .6; }
+.h-book .hc-icon, .kind-hero.h-book { background: linear-gradient(135deg, #22c55e, #0d9488); }
+.h-doc .hc-icon, .kind-hero.h-doc { background: linear-gradient(135deg, #3b82f6, #4f46e5); }
+.h-card .hc-icon, .kind-hero.h-card { background: linear-gradient(135deg, #f59e0b, #ea580c); }
+.h-passport .hc-icon, .kind-hero.h-passport { background: linear-gradient(135deg, #8b5cf6, #db2777); }
+.h-esign .hc-icon { background: linear-gradient(135deg, #14b8a6, #0369a1); }
+.h-watermark .hc-icon { background: linear-gradient(135deg, #64748b, #1e293b); }
+@media (min-width: 720px) { .hgrid { grid-template-columns: repeat(4, 1fr); } }
+@media (max-width: 340px) { .hgrid { grid-template-columns: 1fr; } .hcard { min-height: 0; } }
+/* inside a card */
+.kind-hero { display: flex; align-items: center; gap: 14px; padding: 18px; border-radius: 20px; color: #fff; margin: 6px 0 14px; box-shadow: 0 8px 22px rgba(15,23,42,.16); }
+.kh-icon { width: 54px; height: 54px; border-radius: 16px; background: rgba(255,255,255,.2); display: grid; place-items: center; font-size: 28px; flex: none; }
+.kh-title { font-size: 19px; font-weight: 800; }
+.kh-sub { font-size: 13px; opacity: .92; margin-top: 2px; }
+.new-btn { margin-bottom: 4px; }

@@ -214,6 +214,7 @@ async function route() {
   if (a === "link" && id) return viewLink(id);
   if (a === "page" && id) return viewPage(id);
   if (a === "card" && id) return viewCard(id);
+  if (a === "kind" && id) return viewKind(id);
   if (a === "esign" || a === "watermark") {
     const T = await import("./pdftools.js");
     const ui = { app, modal, toast, ask, sheet, esc, go, deliver };
@@ -225,53 +226,36 @@ async function route() {
 window.addEventListener("hashchange", route);
 
 // ================================================================ LIBRARY
+// home: only the cards — the scans of each kind are inside its card
+const TOOLS = {
+  esign: { icon: "✍️", title: "E-sign PDF", sub: "Sign any PDF and place your signature exactly", href: "#/esign" },
+  watermark: { icon: "💧", title: "Watermark PDF", sub: "Your text in the middle of every page", href: "#/watermark" },
+};
+const cardHTML = (k, v, meta, href) => `
+  <a class="hcard h-${k}" href="${href}">
+    <span class="hc-icon">${v.icon}</span>
+    <span class="hc-body"><span class="hc-title">${v.title}</span><span class="hc-sub">${v.sub}</span>${meta ? `<span class="hc-meta">${meta}</span>` : ""}</span>
+    <span class="hc-go" aria-hidden="true">›</span>
+  </a>`;
+
 async function viewLibrary() {
   const books = await DB.listBooks();
-  const counts = await Promise.all(books.map((b) => DB.countPages(b.id)));
   const st = await DB.storageInfo();
-  // four scan kinds as cards; the chosen one lists its scans below
-  const tab = KINDS[settings.homeTab] ? settings.homeTab : "book";
-  const all = books.map((b, i) => ({ b, n: counts[i] }));
-  const shown = all.filter(({ b }) => kindOf(b) === tab);
-  const nOf = (k) => all.filter(({ b }) => kindOf(b) === k).length;
-  const K = KINDS[tab];
-  const linkOf = (b) => (CARD_SPEC[b.kind] ? "#/card/" : "#/book/") + b.id;
+  const nOf = (k) => books.filter((b) => kindOf(b) === k).length;
+  const word = { book: ["book", "books"], doc: ["scan", "scans"], card: ["card", "cards"], passport: ["passport", "passports"] };
   app.innerHTML = `
     <header class="bar"><div class="brand"><span class="logo">📚</span> BookSnap</div><div style="flex:1"></div>
       <button class="btn small recv-btn" id="recv" title="Use this phone as the receiver: another phone scans, the pages arrive here">📥 Receive</button>
       <button class="icon" id="help" aria-label="How to use">?</button></header>
-    <main class="lib">
+    <main class="lib home">
       ${N.isAndroid() ? `<div class="updrow"><span id="appver" class="muted small"></span><button class="btn small" id="chkupd">⬆ Check for updates</button></div>` : ""}
-      <div class="modes" role="tablist">
-        ${Object.entries(KINDS).map(([k, v]) => `<button class="mode-card m-${k}${k === tab ? " active" : ""}" data-tab="${k}" role="tab" aria-selected="${k === tab}">
-          <span class="mc-icon">${v.icon}</span><span class="mc-n">${nOf(k)}</span>
-          <span class="mc-title">${v.title}</span><span class="mc-sub">${v.sub}</span></button>`).join("")}
-        <a class="mode-card m-esign" href="#/esign"><span class="mc-icon">✍️</span><span class="mc-n">PDF</span>
-          <span class="mc-title">E-sign PDF</span><span class="mc-sub">Put your signature on any PDF</span></a>
-        <a class="mode-card m-wm" href="#/watermark"><span class="mc-icon">💧</span><span class="mc-n">PDF</span>
-          <span class="mc-title">Watermark PDF</span><span class="mc-sub">Your text in the middle of every page</span></a>
-      </div>
-      <button class="btn primary big new-btn m-${tab}" id="new">${K.newLabel}</button>
-      ${shown.length ? `<div class="books">${shown.map(({ b, n }) => `
-        <a class="book" href="${linkOf(b)}">
-          <div class="cover${CARD_SPEC[b.kind] ? " wide" : ""}" data-cover="${b.id}"></div>
-          <div class="info"><div class="name">${esc(b.name)}</div>
-          <div class="meta">${CARD_SPEC[b.kind] ? (n >= 2 ? "Both sides" : n ? "One side" : "Not scanned yet") : n + " pages"} · ${fmtDate(b.updated)}</div></div>
-          <span class="chev">›</span>
-        </a>`).join("")}</div>`
-      : `<div class="empty"><div class="big-emoji">${K.icon}</div><p>No ${K.title.toLowerCase()}s yet.</p><p class="muted">${K.empty}</p></div>`}
+      <h2 class="home-h">Scan</h2>
+      <div class="hgrid">${Object.entries(KINDS).map(([k, v]) => { const n = nOf(k); return cardHTML(k, v, n ? `${n} ${word[k][n > 1 ? 1 : 0]}` : "Start your first", "#/kind/" + k); }).join("")}</div>
+      <h2 class="home-h">PDF tools</h2>
+      <div class="hgrid">${Object.entries(TOOLS).map(([k, v]) => cardHTML(k, v, "", v.href)).join("")}</div>
       <p class="storage">${st.quota ? `Stored on this device: ${fmtBytes(st.usage)} of ${fmtBytes(st.quota)} available` : ""}
       ${st.persisted ? " · protected ✓" : ""}</p>
     </main>`;
-  app.querySelectorAll(".mode-card").forEach((t) => (t.onclick = () => { settings.homeTab = t.dataset.tab; saveSettings(); viewLibrary(); }));
-  app.querySelector("#new").onclick = async () => {
-    // card / passport: straight to the camera (rename later); book / regular: ask for a name
-    const name = CARD_SPEC[tab] ? K.def() : await ask(K.ask, K.def(), "Create");
-    if (!name) return;
-    DB.askPersist();
-    const b = await DB.createBook(name, tab === "book" ? "book" : tab);
-    go("#/scan/" + b.id);
-  };
   app.querySelector("#recv").onclick = () => { location.href = "pc.html"; };
   app.querySelector("#help").onclick = showHelp;
   if (!settings.seenHelp) { settings.seenHelp = true; saveSettings(); showHelp(); }
@@ -287,8 +271,44 @@ async function viewLibrary() {
     Upd.banner(lib).catch(() => {});
     app.querySelector("#chkupd").onclick = (e) => { e.preventDefault(); toast("Checking…"); Upd.banner(lib, { force: true, toast }).catch(() => {}); };
   }
+}
+
+// inside a card: its scans and the button to start a new one
+async function viewKind(kind) {
+  if (!KINDS[kind]) return go("#/");
+  const K = KINDS[kind];
+  settings.homeTab = kind; saveSettings();
+  const books = (await DB.listBooks()).filter((b) => kindOf(b) === kind);
+  const counts = await Promise.all(books.map((b) => DB.countPages(b.id)));
+  const linkOf = (b) => (CARD_SPEC[b.kind] ? "#/card/" : "#/book/") + b.id;
+  app.innerHTML = `
+    <header class="bar"><a class="icon" href="#/" aria-label="Back">‹</a><div class="title">${K.icon} ${K.title}</div></header>
+    <main class="lib">
+      <div class="kind-hero h-${kind}">
+        <span class="kh-icon">${K.icon}</span>
+        <div class="kh-text"><div class="kh-title">${K.title}</div><div class="kh-sub">${K.sub}</div></div>
+      </div>
+      <button class="btn primary big new-btn" id="new">${K.newLabel}</button>
+      ${books.length ? `<h2 class="home-h">${books.length} saved</h2><div class="books">${books.map((b, i) => `
+        <a class="book" href="${linkOf(b)}">
+          <div class="cover${CARD_SPEC[b.kind] ? " wide" : ""}" data-cover="${b.id}"></div>
+          <div class="info"><div class="name">${esc(b.name)}</div>
+          <div class="meta">${CARD_SPEC[b.kind] ? (counts[i] >= 2 ? "Both sides" : counts[i] ? "One side" : "Not scanned yet") : counts[i] + " pages"} · ${fmtDate(b.updated)}</div></div>
+          <span class="chev">›</span>
+        </a>`).join("")}</div>`
+      : `<div class="empty"><div class="big-emoji">${K.icon}</div><p>Nothing here yet.</p><p class="muted">${K.empty}</p></div>`}
+    </main>`;
+  app.querySelector("#new").onclick = async () => {
+    // card / passport: straight to the camera (rename later); book / regular: ask for a name
+    const name = CARD_SPEC[kind] ? K.def() : await ask(K.ask, K.def(), "Create");
+    if (!name) return;
+    DB.askPersist();
+    const b = await DB.createBook(name, kind === "book" ? "book" : kind);
+    go("#/scan/" + b.id);
+  };
   const urls = [];
-  for (const { b } of shown) {
+  cleanup = () => urls.forEach((u) => URL.revokeObjectURL(u));
+  for (const b of books) {
     const ps = await DB.listPages(b.id);
     const first = ps.find((p) => p.status === "done");
     if (!first) continue;
@@ -296,7 +316,6 @@ async function viewLibrary() {
     const el = app.querySelector(`[data-cover="${b.id}"]`);
     if (blob && el) { const u = URL.createObjectURL(blob); urls.push(u); el.style.backgroundImage = `url(${u})`; }
   }
-  cleanup = () => urls.forEach((u) => URL.revokeObjectURL(u));
 }
 
 function showHelp() {
@@ -325,7 +344,7 @@ async function viewBook(bookId) {
 
   app.innerHTML = `
     <header class="bar">
-      <a class="icon" href="#/" aria-label="Back">‹</a>
+      <a class="icon" href="#/kind/${kindOf(book)}" aria-label="Back">‹</a>
       <button class="title" id="title">${esc(book.name)}</button>
       <button class="icon" id="selbtn" aria-label="Select pages" title="Select pages">☑</button>
       <button class="icon" id="menu" aria-label="Menu">⋯</button>
@@ -526,7 +545,7 @@ async function viewBook(bookId) {
     if (v === "delete") {
       if (!(await confirmBox(`Delete “${esc(book.name)}” and all ${pages.length} pages? This can't be undone.`))) return;
       await DB.deleteBook(bookId);
-      go("#/");
+      go("#/kind/" + kindOf(book));
     }
   };
 
@@ -1900,7 +1919,7 @@ async function viewCard(bookId) {
   let pages = await DB.listPages(bookId), url = null, a4 = null, busyMake = false;
   app.innerHTML = `
     <header class="bar">
-      <a class="icon" href="#/" aria-label="Back">‹</a>
+      <a class="icon" href="#/kind/${book.kind}" aria-label="Back">‹</a>
       <div class="title" id="ctitle"></div>
       <button class="icon" id="cmenu" aria-label="More">⋯</button>
     </header>
@@ -1970,7 +1989,7 @@ async function viewCard(bookId) {
   $("#cmenu").onclick = async () => {
     const v = await sheet(book.name, [{ label: "✏️ Rename", value: "rename" }, { label: `🗑 Delete this ${K.title.toLowerCase()}`, value: "delete", danger: true }]);
     if (v === "rename") $("#ctitle").onclick();
-    else if (v === "delete" && (await confirmBox(`Delete “${esc(book.name)}”? This cannot be undone.`))) { await DB.deleteBook(bookId); go("#/"); }
+    else if (v === "delete" && (await confirmBox(`Delete “${esc(book.name)}”? This cannot be undone.`))) { await DB.deleteBook(bookId); go("#/kind/" + book.kind); }
   };
   const off = on("page", async (p) => { if (p.bookId !== bookId) return; pages = await DB.listPages(bookId); render(); });
   cleanup = () => { off(); if (url) URL.revokeObjectURL(url); };

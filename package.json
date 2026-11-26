@@ -1,6 +1,6 @@
 {
   "name": "booksnap",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "private": true,
   "description": "BookSnap book scanner - Android app wrapper",
   "scripts": {

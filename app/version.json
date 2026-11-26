@@ -1,5 +1,5 @@
 {
-  "version": "1.5.1",
-  "apk": "https://github.com/FahadBinAbdullah7/booksnap-scan/releases/download/v1.5.1/BookSnap-v1.5.1.apk",
-  "notes": "Check for updates no longer depends on GitHub's hourly limit."
+  "version": "1.5.2",
+  "apk": "https://github.com/FahadBinAbdullah7/booksnap-scan/releases/download/v1.5.2/BookSnap-v1.5.2.apk",
+  "notes": "New home screen: clean cards; each card opens its own page with its scans."
 }
