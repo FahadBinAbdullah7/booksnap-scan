@@ -81,6 +81,9 @@ export async function createBook(name, kind = "book") {
   const now = Date.now();
   const b = kind === "doc"
     ? { id: uid(), name, kind: "doc", created: now, updated: now, nextOrder: 1, mode: "single", filter: "original" }
+    // card / passport: one photo per side, landscape, real colours (front + back on one A4)
+    : kind === "card" || kind === "passport"
+    ? { id: uid(), name, kind, created: now, updated: now, nextOrder: 1, mode: "single", filter: "original", orient: "landscape" }
     : { id: uid(), name, created: now, updated: now, nextOrder: 1, mode: "spread", filter: "magic" };
   await put("books", b);
   return b;

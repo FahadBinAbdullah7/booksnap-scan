@@ -25,6 +25,24 @@ const saveSettings = () => { try { localStorage.setItem("booksnap.settings", JSO
 // ---------------------------------------------------------------- helpers
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const fmtBytes = (b) => (b > 1e9 ? (b / 1e9).toFixed(1) + " GB" : b > 1e6 ? (b / 1e6).toFixed(0) + " MB" : Math.round(b / 1e3) + " KB");
+const stamp = () => new Date().toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+// the four kinds of scan on the home screen
+const KINDS = {
+  book: { icon: "📖", title: "Book scan", sub: "Books & notebooks · 1 or 2 pages per photo", newLabel: "＋ New book", ask: "Book name", def: () => "Book " + new Date().toLocaleDateString(),
+    empty: "Tap <b>New book</b>, put your book under the phone and start scanning." },
+  doc: { icon: "📄", title: "Regular scan", sub: "Documents, receipts, single sheets", newLabel: "＋ New scan", ask: "Scan name", def: () => "Scan " + new Date().toLocaleString(),
+    empty: "Plain photos, no page detection — crop, rotate and filter each page afterwards." },
+  card: { icon: "💳", title: "Card scan", sub: "ID, debit & other cards · front + back on one A4", newLabel: "＋ Scan a card", def: () => "Card " + stamp(),
+    empty: "Scan the front, then the back — both come out on one A4 page, ready to print or share." },
+  passport: { icon: "🛂", title: "Passport scan", sub: "Photo page (+ another page) on one A4", newLabel: "＋ Scan a passport", def: () => "Passport " + stamp(),
+    empty: "Scan the photo page, then another page if you need it — on one A4 page." },
+};
+const kindOf = (b) => (KINDS[b.kind] ? b.kind : "book");
+// real sizes (mm) for the A4 sheet: ID-1 cards and the passport data page (ID-3)
+const CARD_SPEC = {
+  card: { w: 85.6, h: 53.98, steps: ["front side", "back side"], second: "Back side" },
+  passport: { w: 125, h: 88, steps: ["photo page", "second page"], second: "Second page" },
+};
 const fmtDate = (t) => new Date(t).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 const go = (h) => { location.hash = h; };
 const FILTER_NAMES = { magic: "Magic Color", original: "Original", gray: "Grayscale", bw: "B&W" };
@@ -195,6 +213,13 @@ async function route() {
   if (a === "scan" && id) return viewScan(id, extra ? decodeURIComponent(extra) : null);
   if (a === "link" && id) return viewLink(id);
   if (a === "page" && id) return viewPage(id);
+  if (a === "card" && id) return viewCard(id);
+  if (a === "esign" || a === "watermark") {
+    const T = await import("./pdftools.js");
+    const ui = { app, modal, toast, ask, sheet, esc, go, deliver };
+    cleanup = await (a === "esign" ? T.viewEsign(ui) : T.viewWatermark(ui));
+    return;
+  }
   return viewLibrary();
 }
 window.addEventListener("hashchange", route);
@@ -204,51 +229,47 @@ async function viewLibrary() {
   const books = await DB.listBooks();
   const counts = await Promise.all(books.map((b) => DB.countPages(b.id)));
   const st = await DB.storageInfo();
-  // two tabs: books (book scan) and regular scans
-  const tab = settings.homeTab === "doc" ? "doc" : "book";
+  // four scan kinds as cards; the chosen one lists its scans below
+  const tab = KINDS[settings.homeTab] ? settings.homeTab : "book";
   const all = books.map((b, i) => ({ b, n: counts[i] }));
-  const shown = all.filter(({ b }) => (b.kind === "doc") === (tab === "doc"));
-  const nDoc = all.filter(({ b }) => b.kind === "doc").length, nBook = all.length - nDoc;
+  const shown = all.filter(({ b }) => kindOf(b) === tab);
+  const nOf = (k) => all.filter(({ b }) => kindOf(b) === k).length;
+  const K = KINDS[tab];
+  const linkOf = (b) => (CARD_SPEC[b.kind] ? "#/card/" : "#/book/") + b.id;
   app.innerHTML = `
     <header class="bar"><div class="brand"><span class="logo">📚</span> BookSnap</div><div style="flex:1"></div>
       <button class="btn small recv-btn" id="recv" title="Use this phone as the receiver: another phone scans, the pages arrive here">📥 Receive</button>
       <button class="icon" id="help" aria-label="How to use">?</button></header>
     <main class="lib">
       ${N.isAndroid() ? `<div class="updrow"><span id="appver" class="muted small"></span><button class="btn small" id="chkupd">⬆ Check for updates</button></div>` : ""}
-      <div class="tabs" role="tablist">
-        <button class="tab${tab === "book" ? " active" : ""}" data-tab="book" role="tab">📖 Book scan <span class="tabn">${nBook}</span></button>
-        <button class="tab${tab === "doc" ? " active" : ""}" data-tab="doc" role="tab">📄 Regular scan <span class="tabn">${nDoc}</span></button>
+      <div class="modes" role="tablist">
+        ${Object.entries(KINDS).map(([k, v]) => `<button class="mode-card m-${k}${k === tab ? " active" : ""}" data-tab="${k}" role="tab" aria-selected="${k === tab}">
+          <span class="mc-icon">${v.icon}</span><span class="mc-n">${nOf(k)}</span>
+          <span class="mc-title">${v.title}</span><span class="mc-sub">${v.sub}</span></button>`).join("")}
+        <a class="mode-card m-esign" href="#/esign"><span class="mc-icon">✍️</span><span class="mc-n">PDF</span>
+          <span class="mc-title">E-sign PDF</span><span class="mc-sub">Put your signature on any PDF</span></a>
+        <a class="mode-card m-wm" href="#/watermark"><span class="mc-icon">💧</span><span class="mc-n">PDF</span>
+          <span class="mc-title">Watermark PDF</span><span class="mc-sub">Your text in the middle of every page</span></a>
       </div>
-      ${tab === "book"
-        ? `<button class="btn primary big" id="new">＋ New book</button>`
-        : `<button class="btn primary big" id="newdoc">＋ New scan</button>
-           <p class="muted small newhint">Plain photos, no page detection — crop, rotate and filter each page afterwards.</p>`}
+      <button class="btn primary big new-btn m-${tab}" id="new">${K.newLabel}</button>
       ${shown.length ? `<div class="books">${shown.map(({ b, n }) => `
-        <a class="book" href="#/book/${b.id}">
-          <div class="cover" data-cover="${b.id}"></div>
+        <a class="book" href="${linkOf(b)}">
+          <div class="cover${CARD_SPEC[b.kind] ? " wide" : ""}" data-cover="${b.id}"></div>
           <div class="info"><div class="name">${esc(b.name)}</div>
-          <div class="meta">${n} pages · ${fmtDate(b.updated)}</div></div>
+          <div class="meta">${CARD_SPEC[b.kind] ? (n >= 2 ? "Both sides" : n ? "One side" : "Not scanned yet") : n + " pages"} · ${fmtDate(b.updated)}</div></div>
           <span class="chev">›</span>
         </a>`).join("")}</div>`
-      : tab === "book"
-        ? `<div class="empty"><div class="big-emoji">📖</div><p>No books yet.</p><p class="muted">Tap <b>New book</b>, put your book under the phone and start scanning.</p></div>`
-        : `<div class="empty"><div class="big-emoji">📄</div><p>No regular scans yet.</p><p class="muted">Tap <b>New scan</b> to photograph documents, receipts or single sheets.</p></div>`}
+      : `<div class="empty"><div class="big-emoji">${K.icon}</div><p>No ${K.title.toLowerCase()}s yet.</p><p class="muted">${K.empty}</p></div>`}
       <p class="storage">${st.quota ? `Stored on this device: ${fmtBytes(st.usage)} of ${fmtBytes(st.quota)} available` : ""}
       ${st.persisted ? " · protected ✓" : ""}</p>
     </main>`;
-  app.querySelectorAll(".tab").forEach((t) => (t.onclick = () => { settings.homeTab = t.dataset.tab; saveSettings(); viewLibrary(); }));
-  if (app.querySelector("#new")) app.querySelector("#new").onclick = async () => {
-    const name = await ask("Book name", "Book " + new Date().toLocaleDateString(), "Create");
+  app.querySelectorAll(".mode-card").forEach((t) => (t.onclick = () => { settings.homeTab = t.dataset.tab; saveSettings(); viewLibrary(); }));
+  app.querySelector("#new").onclick = async () => {
+    // card / passport: straight to the camera (rename later); book / regular: ask for a name
+    const name = CARD_SPEC[tab] ? K.def() : await ask(K.ask, K.def(), "Create");
     if (!name) return;
     DB.askPersist();
-    const b = await DB.createBook(name);
-    go("#/scan/" + b.id);
-  };
-  if (app.querySelector("#newdoc")) app.querySelector("#newdoc").onclick = async () => {
-    const name = await ask("Scan name", "Scan " + new Date().toLocaleString(), "Create");
-    if (!name) return;
-    DB.askPersist();
-    const b = await DB.createBook(name, "doc");
+    const b = await DB.createBook(name, tab === "book" ? "book" : tab);
     go("#/scan/" + b.id);
   };
   app.querySelector("#recv").onclick = () => { location.href = "pc.html"; };
@@ -296,6 +317,7 @@ async function viewBook(bookId) {
   kickQueue();                       // make sure nothing is left waiting
   let book = await DB.get("books", bookId);
   if (!book) return go("#/");
+  if (CARD_SPEC[book.kind]) return go("#/card/" + bookId);
   let pages = await DB.listPages(bookId);
   let selecting = false;
   const selected = new Set();
@@ -707,6 +729,7 @@ async function viewScan(bookId, pcCode = null) {
   let book = await DB.get("books", bookId);
   if (!book) return go("#/");
   const isDoc = book.kind === "doc";                       // regular scan: plain camera, no detection
+  const cardSpec = CARD_SPEC[book.kind] || null;            // card / passport: guide frame, front then back
   // from the page preview: "retake:<pageId>" (one photo replaces that page) or
   // "insert:<pageId>" (photos go in right after that page); manual shutter only
   let special = null;
@@ -724,7 +747,7 @@ async function viewScan(bookId, pcCode = null) {
   const retakeSide = special && special.kind === "retake" && (special.side === "L" || special.side === "R") ? special.side : null;
   // retake starts as 1 page, portrait, page found automatically — change it if needed (this retake only)
   const isRetakeShot = !!(special && special.kind === "retake");
-  let mode = isDoc || isRetakeShot ? "single" : book.mode || "spread";
+  let mode = isDoc || isRetakeShot || cardSpec ? "single" : book.mode || "spread";
   let count = await DB.countPages(bookId);
 
   app.innerHTML = `
@@ -763,6 +786,11 @@ async function viewScan(bookId, pcCode = null) {
   document.body.classList.add("dark");
   const $ = (s) => app.querySelector(s);
   const video = $(".cam"), overlay = $(".overlay"), statusEl = $("#status"), ringFg = $("#ringfg");
+  if (cardSpec) {
+    for (const sel of ["#lockbtn", "#delay", "#pc"]) $(sel)?.classList.add("hidden");
+    for (const sel of ["#segMode", "#segAuto"]) $(sel).closest(".trow").classList.add("hidden");
+    $(".scan").classList.add("cardscan");
+  }
   if (isDoc) {
     for (const sel of ["#lockbtn", "#delay", "#pc"]) $(sel)?.classList.add("hidden");
     for (const sel of ["#segMode", "#segOrient", "#segAuto"]) $(sel).closest(".trow").classList.add("hidden");
@@ -778,7 +806,7 @@ async function viewScan(bookId, pcCode = null) {
   const showTools = (v) => { toolsPanel.classList.toggle("hidden", !v); $("#tools").setAttribute("aria-expanded", String(v)); $("#tools").classList.toggle("on", v); };
   $("#tools").onclick = (e) => { e.stopPropagation(); showTools(toolsPanel.classList.contains("hidden")); };
   $(".stage").addEventListener("pointerdown", () => showTools(false));
-  const backTo = () => go(special ? "#/page/" + (special.added[0] || special.pageId) : "#/book/" + bookId);
+  const backTo = () => go(cardSpec ? "#/card/" + bookId : special ? "#/page/" + (special.added[0] || special.pageId) : "#/book/" + bookId);
   const cam = N.isAndroid() ? new NativeCamera() : new Camera(video);
   const prof = await Dev.profile().catch(() => ({}));
   cam.profile = prof;
@@ -817,16 +845,31 @@ async function viewScan(bookId, pcCode = null) {
   let link = null, pcOriginals = false, pcCodeLast = null, userUnlinked = false, reconnecting = false;
   const shots = [];               // captures taken in this session (for retake)
   const remote = () => !!(link && link.open);
-  const autoOn = () => !!settings.auto && !isDoc && !special;
+  const autoOn = () => !!settings.auto && !isDoc && !special && !cardSpec;
   // Portrait / Landscape (per book). Landscape is the natural choice for 2 pages per photo.
-  let orient = isRetakeShot ? "portrait" : book.orient || "portrait";
+  let orient = cardSpec ? book.orient || "landscape" : isRetakeShot ? "portrait" : book.orient || "portrait";
   // locked page area (set once, reused for every photo until unlocked)
   // regular scan: the whole photo, every time (a fixed full-frame area, marked "plain")
   const FULL = { mode: "single", pts: [[0, 0], [1, 0], [1, 1], [0, 1]], plain: true };
   // retake / add page: a lock set here is only for these photos (the book keeps its own)
   const tmpLocks = {};
   const bookLock = () => (mode in tmpLocks ? tmpLocks[mode] : isRetakeShot ? null : book.lock && book.lock.mode === mode ? book.lock : null);
-  let lock = isDoc ? FULL : isRetakeShot ? null : bookLock();
+  let lock = isDoc ? FULL : cardSpec ? null : isRetakeShot ? null : bookLock();
+  // card / passport: a frame in the card's shape in the middle of the picture; the photo is cut to it
+  const frameLock = () => {
+    const { w, h } = cam.size;
+    if (!w || !h) return null;
+    const r = effRotate() % 180 ? 1 : 0, W = r ? h : w, H = r ? w : h;
+    const A = cardSpec.w / cardSpec.h;
+    let fw = W * 0.86, fh = fw / A;
+    if (fh > H * 0.8) { fh = H * 0.8; fw = fh * A; }
+    const x0 = (W - fw) / 2 / W, x1 = 1 - x0, y0 = (H - fh) / 2 / H, y1 = 1 - y0;
+    // plain: the card exactly as framed (no trimming, no tilt fix, no line straightening)
+    return { mode: "single", pts: [[x0, y0], [x1, y0], [x1, y1], [x0, y1]], plain: true };
+  };
+  const cardStep = () => (count >= 1 ? 1 : 0);
+  const cardMsg = () => (count >= 2 ? "Both sides done — tap Done to see the A4 page"
+    : `${cardStep() === 0 ? "1 of 2" : "2 of 2"}: put the ${cardSpec.steps[cardStep()]} inside the frame and tap the button` + (cardStep() === 1 ? " (or Done if there is none)" : ""));
   // web version: a sideways video in landscape mode is turned upright here; the app turns the screen instead
   const effRotate = () => ((cam.native ? 0 : orient === "landscape" && cam.size.h > cam.size.w ? 90 : 0) + settings.rotate) % 360;
   // auto mode: page-number check
@@ -1443,9 +1486,9 @@ async function viewScan(bookId, pcCode = null) {
         kickQueue();
         if (special.kind === "retake") {
           await DB.deletePages([special.pageId]);
-          toast(`Page ${special.num} replaced ✓`);
+          toast(cardSpec ? "Replaced ✓" : `Page ${special.num} replaced ✓`);
           lastViewed = { bookId, id: ps[0].id };
-          go("#/page/" + ps[0].id);
+          go(cardSpec ? "#/card/" + bookId : "#/page/" + ps[0].id);
           return;
         }
         count += ps.length; $("#count").textContent = count;
@@ -1456,6 +1499,14 @@ async function viewScan(bookId, pcCode = null) {
       }
       count += ps.length;
       $("#count").textContent = count;
+      if (cardSpec) {
+        shots.push(ps[0].captureId); $("#undo").classList.remove("hidden");
+        kickQueue();
+        if (count >= 2) { toast("Both sides scanned ✓"); go("#/card/" + bookId); return; }
+        setStatus("✓ Done. " + cardMsg()); savedAt = performance.now() + 60000;
+        try { navigator.vibrate?.([60, 80, 60]); } catch {}
+        return;
+      }
       lastShotSig = sig; turnSeen = false;
       rememberPage(sig, opts.auto ? fp : pageFp());
       shots.push(ps[0].captureId);
@@ -1599,6 +1650,22 @@ async function viewScan(bookId, pcCode = null) {
     const { w: vw, h: vh } = cam.size;
     const s = Math.min(cw / vw, ch / vh), ox = (cw - vw * s) / 2, oy = (ch - vh * s) / 2;
     const pt = (fx, fy) => { const [ux, uy] = P.unrotPoint([fx, fy], effRotate()); return [ox + ux * vw * s, oy + uy * vh * s]; };
+    if (cardSpec && lock) {
+      // card guide: darken around the frame, white frame with bold corners
+      const q = lock.pts.map(([x, y]) => pt(x, y));
+      ctx.fillStyle = "rgba(0,0,0,.5)"; ctx.fillRect(0, 0, cw, ch);
+      ctx.globalCompositeOperation = "destination-out";
+      ctx.beginPath(); q.forEach(([a, b], i) => (i ? ctx.lineTo(a, b) : ctx.moveTo(a, b))); ctx.closePath(); ctx.fill();
+      ctx.globalCompositeOperation = "source-over";
+      ctx.strokeStyle = "rgba(255,255,255,.9)"; ctx.lineWidth = 2; ctx.stroke();
+      const xs = q.map((p) => p[0]), ys = q.map((p) => p[1]);
+      const L = Math.min(...xs), R = Math.max(...xs), T = Math.min(...ys), B = Math.max(...ys), k = Math.min(R - L, B - T) * 0.14;
+      ctx.lineWidth = 6; ctx.lineCap = "round"; ctx.strokeStyle = "#22c55e";
+      for (const [x, y, dx, dy] of [[L, T, 1, 1], [R, T, -1, 1], [R, B, -1, -1], [L, B, 1, -1]]) {
+        ctx.beginPath(); ctx.moveTo(x + dx * k, y); ctx.lineTo(x, y); ctx.lineTo(x, y + dy * k); ctx.stroke();
+      }
+      return;
+    }
     ctx.lineWidth = 3;
     ctx.strokeStyle = lock ? "#facc15" : "#22c55e";
     ctx.fillStyle = lock ? "rgba(250,204,21,0.10)" : "rgba(34,197,94,0.12)";
@@ -1637,6 +1704,7 @@ async function viewScan(bookId, pcCode = null) {
   };
   function detectStep() {
     if (isDoc) { geo = null; return; }                       // regular scan: no page detection
+    if (cardSpec) { lock = frameLock(); geo = lock ? P.geoFromLock(lock) : null; drawOverlay(); return; }
     const checking_ = autoOn() && !paused && !editing;
     if (lock) {
       geo = P.geoFromLock(lock); drawOverlay(); sendGeo();
@@ -1695,7 +1763,8 @@ async function viewScan(bookId, pcCode = null) {
     if (cam.canTorch) $("#torch").classList.remove("hidden");
     getWake();
     DB.askPersist();
-    setStatus(special ? (special.kind === "retake" ? `Retake page ${special.num}: point at the page and tap the button (1 page · Portrait — change in 🧰 if needed)`
+    if (cardSpec) { setStatus(special ? "Retake: put the card inside the frame and tap the button" : cardMsg()); savedAt = performance.now() + 600000; }
+    else setStatus(special ? (special.kind === "retake" ? `Retake page ${special.num}: point at the page and tap the button (1 page · Portrait — change in 🧰 if needed)`
       : `Add pages after page ${special.num}: tap the button for each photo`)
       : autoOn() ? "Auto: ready — the photo is taken a moment after each page turn" : "Tap the button to shoot");
     if (special) savedAt = performance.now() + 60000;          // keep the instruction on screen
@@ -1703,7 +1772,7 @@ async function viewScan(bookId, pcCode = null) {
     if (special) { /* retake / add page: no PC link */ }
     else if (pcCode === "qr") connectDialog();
     else if (pcCode) connectPc(pcCode);
-    else if (settings.lastPc && settings.pcAuto !== false && !isDoc) {    // reconnect to the saved PC by itself
+    else if (settings.lastPc && settings.pcAuto !== false && !isDoc && !cardSpec) {    // reconnect to the saved PC by itself
       note("Connecting to your PC…", 4000);
       pcCodeLast = settings.lastPc;
       connectPc(settings.lastPc, true).then(() => { if (!remote() && running && !userUnlinked) { note("PC not found yet — will keep trying (or tap 💻 PC)", 4000); reconnectLoop(true); } });
@@ -1775,6 +1844,137 @@ async function placeCaptures(bookId, pageId, kind, files, mode, filter) {
   if (kind === "retake") await DB.deletePages([pageId]);
   kickQueue();
   return all;
+}
+
+// ================================================================ CARD / PASSPORT
+// front + back (or photo page + second page) on one A4 sheet at their real size
+const A4 = { w: 2480, h: 3508 };            // 300 dpi
+async function composeA4(book, pages) {
+  const spec = CARD_SPEC[book.kind];
+  const px = (mm) => Math.round((mm / 25.4) * 300);
+  const c = document.createElement("canvas"); c.width = A4.w; c.height = A4.h;
+  const g = c.getContext("2d");
+  g.fillStyle = "#fff"; g.fillRect(0, 0, A4.w, A4.h);
+  const W = px(spec.w), Hmax = px(spec.h) * 1.15, gap = px(14);
+  let y = px(22);
+  for (const p of pages.slice(0, 2)) {
+    const b = await DB.getBlob("full:" + p.id);
+    if (!b) continue;
+    const bmp = await createImageBitmap(b);
+    let w = W, h = (W * bmp.height) / bmp.width;
+    if (h > Hmax) { h = Hmax; w = (h * bmp.width) / bmp.height; }   // a page taken upright: keep it inside the space
+    const x = (A4.w - w) / 2;
+    g.imageSmoothingQuality = "high";
+    g.drawImage(bmp, x, y, w, h); bmp.close();
+    g.strokeStyle = "rgba(0,0,0,.18)"; g.lineWidth = 3; g.strokeRect(x, y, w, h);
+    y += h + gap;
+  }
+  return new Promise((res) => c.toBlob(res, "image/jpeg", 0.92));
+}
+
+// save a file the way this device can: Documents/BookSnap/<folder>/ in the app, a download link on the web
+async function deliver(book, name, blob, folder) {
+  if (N.isNative()) {
+    const path = `BookSnap/${folder}/${name}`;
+    const uri = await N.saveBlob(path, blob);
+    const r = modal(`<h3>Saved ✓</h3><p>${esc(name)}</p><p class="muted small">In <b>Documents/BookSnap/${esc(folder)}/</b></p>
+      <div class="col"><button class="btn primary" id="sh">↗ Share</button><button class="btn" id="cl">Close</button></div>`);
+    r.el.querySelector("#cl").onclick = () => r.close();
+    r.el.querySelector("#sh").onclick = () => N.shareFiles([uri], book.name).catch(() => {});
+    return;
+  }
+  const url = URL.createObjectURL(blob), file = new File([blob], name, { type: blob.type });
+  const canShare = navigator.canShare && navigator.canShare({ files: [file] });
+  const r = modal(`<h3>Ready ✓</h3><p>${esc(name)} <span class="muted">· ${fmtBytes(blob.size)}</span></p>
+    <div class="col"><a class="btn primary" href="${url}" download="${esc(name)}">⬇ Save</a>${canShare ? '<button class="btn" id="sh">↗ Share</button>' : ""}<button class="btn" id="cl">Close</button></div>`);
+  r.el.querySelector("#cl").onclick = () => { r.close(); setTimeout(() => URL.revokeObjectURL(url), 60000); };
+  const sh = r.el.querySelector("#sh");
+  if (sh) sh.onclick = () => navigator.share({ files: [file], title: book.name }).catch(() => {});
+}
+
+async function viewCard(bookId) {
+  let book = await DB.get("books", bookId);
+  if (!book || !CARD_SPEC[book.kind]) return go("#/");
+  kickQueue();
+  const spec = CARD_SPEC[book.kind], K = KINDS[book.kind];
+  let pages = await DB.listPages(bookId), url = null, a4 = null, busyMake = false;
+  app.innerHTML = `
+    <header class="bar">
+      <a class="icon" href="#/" aria-label="Back">‹</a>
+      <div class="title" id="ctitle"></div>
+      <button class="icon" id="cmenu" aria-label="More">⋯</button>
+    </header>
+    <main class="cardview">
+      <div class="a4wrap"><div class="a4" id="a4"><img id="a4img" alt="A4 page"><div class="a4busy" id="a4busy"><span class="spin"></span> Preparing…</div></div></div>
+      <div class="sides" id="sides"></div>
+      <div class="filters" id="cfilters">${P.FILTERS.map((f) => `<button class="fbtn" data-f="${f}">${FILTER_NAMES[f]}</button>`).join("")}</div>
+      <div class="col cactions">
+        <button class="btn primary big" id="cpdf">⬇ Save A4 PDF</button>
+        <button class="btn" id="cjpg">🖼 Save A4 image (JPG)</button>
+      </div>
+    </main>`;
+  const $ = (q) => app.querySelector(q);
+  const title = () => { $("#ctitle").textContent = `${K.icon} ${book.name}`; };
+  title();
+
+  function sidesHTML() {
+    const names = [spec.steps[0], spec.steps[1]].map((x) => x[0].toUpperCase() + x.slice(1));
+    return names.map((nm, i) => {
+      const p = pages[i];
+      return `<div class="side-row"><span class="sname">${nm}</span>
+        <span class="sstate">${p ? (p.status === "done" ? "✓ scanned" : p.status === "error" ? "⚠ failed" : "processing…") : "not scanned"}</span>
+        ${p ? `<button class="btn small" data-retake="${p.id}">↻ Retake</button>` : `<button class="btn small primary" data-add="1">＋ Scan</button>`}</div>`;
+    }).join("");
+  }
+  async function render() {
+    $("#sides").innerHTML = sidesHTML();
+    app.querySelectorAll(".fbtn").forEach((b) => b.classList.toggle("active", b.dataset.f === (book.filter || "original")));
+    const ready = pages.length && pages.every((p) => p.status !== "pending");
+    $("#a4busy").classList.toggle("hidden", !!ready);
+    if (!ready) return;
+    a4 = await composeA4(book, pages.filter((p) => p.status === "done"));
+    if (url) URL.revokeObjectURL(url);
+    url = URL.createObjectURL(a4);
+    $("#a4img").src = url;
+  }
+  $("#sides").onclick = (e) => {
+    const r = e.target.closest("[data-retake]"), add = e.target.closest("[data-add]");
+    if (r) go(`#/scan/${bookId}/${encodeURIComponent("retake:" + r.dataset.retake)}`);
+    else if (add) go("#/scan/" + bookId);
+  };
+  $("#cfilters").onclick = async (e) => {
+    const f = e.target.closest(".fbtn")?.dataset.f;
+    if (!f || f === book.filter) return;
+    book = { ...book, filter: f }; await DB.saveBook(book);
+    for (const p of pages) await DB.editPage(p.id, { filter: f });
+    pages = await DB.listPages(bookId);
+    kickQueue(); render();
+  };
+  const fileBase = () => N.safeName(book.name);
+  $("#cpdf").onclick = async () => {
+    if (!a4 || busyMake) return toast("Still preparing — a moment");
+    busyMake = true;
+    try { await deliver(book, fileBase() + ".pdf", await buildPdf([a4], { title: book.name }), "Cards"); } catch (e) { toast("Failed: " + e.message, 5000); }
+    busyMake = false;
+  };
+  $("#cjpg").onclick = async () => {
+    if (!a4) return toast("Still preparing — a moment");
+    try { await deliver(book, fileBase() + ".jpg", a4, "Cards"); } catch (e) { toast("Failed: " + e.message, 5000); }
+  };
+  $("#a4img").onclick = () => { if (a4) zoomViewer(a4, book.name); };
+  $("#ctitle").onclick = async () => {
+    const n = await ask("Name", book.name, "Save");
+    if (!n) return;
+    book = await DB.saveBook({ ...book, name: n }); title();
+  };
+  $("#cmenu").onclick = async () => {
+    const v = await sheet(book.name, [{ label: "✏️ Rename", value: "rename" }, { label: `🗑 Delete this ${K.title.toLowerCase()}`, value: "delete", danger: true }]);
+    if (v === "rename") $("#ctitle").onclick();
+    else if (v === "delete" && (await confirmBox(`Delete “${esc(book.name)}”? This cannot be undone.`))) { await DB.deleteBook(bookId); go("#/"); }
+  };
+  const off = on("page", async (p) => { if (p.bookId !== bookId) return; pages = await DB.listPages(bookId); render(); });
+  cleanup = () => { off(); if (url) URL.revokeObjectURL(url); };
+  render();
 }
 
 async function viewPage(pageId) {
