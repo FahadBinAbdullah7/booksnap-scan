@@ -205,9 +205,9 @@ async function onMessage(m) {
     }
     case "page": {
       const blob = new Blob([m.jpeg], { type: "image/jpeg" });
-      pages.set(m.order, { blob, side: m.side, id: m.id, blurry: !!m.blurry });
+      pages.set(m.order, { blob, side: m.side, id: m.id, blurry: !!m.blurry, retaken: !!m.retaken });
       await saveFile(`${pad(m.order)}.jpg`, blob);
-      setThumb(m.order, blob, !!m.blurry);
+      setThumb(m.order, blob, !!m.blurry, !!m.retaken);
       updateCounts();
       if (m.blurry) {
         $("blurwarn").textContent = `⚠ Page ${Math.round(m.order)} looks blurry. Press ⌫ to retake it before turning the page.`;
@@ -304,7 +304,7 @@ UI.onDeletePage(deletePage);
 
 // click a page: look through all pages like a PDF (‹ ›, strip, zoom, ✕ to remove)
 let viewer = null, viewerTimer = null;
-const sortedPages = () => [...pages.entries()].sort((a, b) => a[0] - b[0]).map(([order, p]) => ({ order, blob: p.blob, blurry: p.blurry }));
+const sortedPages = () => [...pages.entries()].sort((a, b) => a[0] - b[0]).map(([order, p]) => ({ order, blob: p.blob, blurry: p.blurry, retaken: p.retaken }));
 UI.onOpenPage((order) => {
   if (viewer) viewer.close();
   viewer = pageViewer(order, { list: sortedPages, remove: deletePage, onClose: () => { viewer = null; } });
@@ -408,10 +408,11 @@ function figFor(order) {
   return f;
 }
 function addPendingThumb(order) { const f = figFor(order); if (!f.querySelector("img").src) f.classList.add("pending"); }
-async function setThumb(order, blob, blurry = false) {
+async function setThumb(order, blob, blurry = false, retaken = false) {
   const f = figFor(order);
   f._full = blob;                        // click the thumbnail to zoom the page
   f.classList.toggle("blurry", blurry);
+  f.classList.toggle("retaken", retaken);
   try {
     const bmp = await createImageBitmap(blob, { resizeWidth: 240 });
     const c = document.createElement("canvas"); c.width = bmp.width; c.height = bmp.height;

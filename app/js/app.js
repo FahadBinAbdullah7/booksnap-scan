@@ -183,6 +183,8 @@ async function kickQueue() {
 
 // ---------------------------------------------------------------- router
 let cleanup = null;
+// the page last opened in the page view: the book's page list scrolls back to it
+let lastViewed = null;          // { bookId, id }
 async function route() {
   try { cleanup?.(); } catch {}
   cleanup = null;
@@ -337,7 +339,7 @@ async function viewBook(bookId) {
   }
 
   const cellHTML = (p, i) => `<a class="cell ${p.status}${selected.has(p.id) ? " selected" : ""}" data-id="${p.id}" href="#/page/${p.id}">
-      <img alt="">${p.status === "pending" ? '<span class="spin"></span>' : ""}${p.status === "error" ? '<span class="err">!</span>' : ""}${p.blurry && p.status === "done" ? '<span class="blur-badge" title="Looks blurry">⚠ blurry</span>' : ""}
+      <img alt="">${p.status === "pending" ? '<span class="spin"></span>' : ""}${p.status === "error" ? '<span class="err">!</span>' : ""}${p.blurry && p.status === "done" ? '<span class="blur-badge" title="Looks blurry">⚠ blurry</span>' : ""}${p.retaken ? '<span class="re-badge" title="This page was retaken">↻ Retaken</span>' : ""}
       <span class="num">${i + 1}</span><span class="tick">✓</span></a>`;
 
   function renderGrid() {
@@ -357,6 +359,11 @@ async function viewBook(bookId) {
     if (sb) sb.onclick = () => { if (!selecting) setSelecting(true); pages.forEach((p) => p.blurry && selected.add(p.id)); updateSel(); toast("Blurry pages selected — open one to check, or delete and rescan"); };
   }
   renderGrid();
+  // back from a page (or after a retake): show that place in the book, not the first page
+  if (lastViewed && lastViewed.bookId === bookId) {
+    const c = grid.querySelector(`[data-id="${lastViewed.id}"]`);
+    if (c) requestAnimationFrame(() => { c.scrollIntoView({ block: "center" }); c.classList.add("flash-here"); setTimeout(() => c.classList.remove("flash-here"), 1600); });
+  }
 
   grid.onclick = (e) => {
     const cell = e.target.closest(".cell");
@@ -707,9 +714,13 @@ async function viewScan(bookId, pcCode = null) {
     const slot = await slotFor(bookId, sm[2], sm[1]);
     if (!slot) return go("#/book/" + bookId);
     const list = await DB.listPages(bookId);
-    special = { kind: sm[1], pageId: sm[2], slot, num: list.findIndex((p) => p.id === sm[2]) + 1, added: [] };
+    const orig = list.find((p) => p.id === sm[2]);
+    special = { kind: sm[1], pageId: sm[2], slot, num: list.findIndex((p) => p.id === sm[2]) + 1, added: [], side: orig ? orig.side : "S" };
   }
-  let mode = isDoc || (special && special.kind === "retake") ? "single" : book.mode || "spread";
+  // retake: same settings as the original photo — a left/right page of a 2-page photo is taken
+  // in 2-page mode with the book's locked area, and only that side is kept (same crop as before)
+  const retakeSide = special && special.kind === "retake" && (special.side === "L" || special.side === "R") ? special.side : null;
+  let mode = isDoc ? "single" : special && special.kind === "retake" ? (retakeSide ? "spread" : "single") : book.mode || "spread";
   let count = await DB.countPages(bookId);
 
   app.innerHTML = `
@@ -755,7 +766,7 @@ async function viewScan(bookId, pcCode = null) {
   }
   if (special) {
     for (const sel of ["#delay", "#pc", "#segAuto"]) $(sel)?.classList.add("hidden");
-    if (special.kind === "retake") $("#segMode")?.classList.add("hidden");
+    if (special.kind === "retake" && !retakeSide) $("#segMode")?.classList.add("hidden");
     for (const id of ["#segAuto", "#segMode"]) if ($(id)?.classList.contains("hidden")) $(id).closest(".trow").classList.add("hidden");
   }
   // 🧰 Tools menu (pages, screen, Manual/Auto, zoom, light) — opens under the top bar
@@ -1046,8 +1057,10 @@ async function viewScan(bookId, pcCode = null) {
     } finally { editing = null; stillSince = 0; }
   }
 
+  let retakeNext = false;          // ↶ Retake (phone or PC): the next photo is marked "Retaken"
   async function undoLast(fromAuto = false) {
     if ((busy && !fromAuto) || !shots.length) return;
+    if (!fromAuto) retakeNext = true;
     busy = true;
     const capId = shots.pop();
     try {
@@ -1225,7 +1238,7 @@ async function viewScan(bookId, pcCode = null) {
     if (num < 1) return;
     const blob = await DB.getBlob("full:" + p.id);
     if (!blob || !remote()) return;
-    await link.send({ t: "page", id: p.id, order: num, side: p.side, filter: p.filter, w: p.w, h: p.h, blurry: !!p.blurry, sharp: p.sharp, jpeg: await blob.arrayBuffer() });
+    await link.send({ t: "page", id: p.id, order: num, side: p.side, filter: p.filter, w: p.w, h: p.h, blurry: !!p.blurry, retaken: !!p.retaken, sharp: p.sharp, jpeg: await blob.arrayBuffer() });
   }
   const offPage = on("page", (p) => {
     if (p.bookId !== bookId || p.status !== "done") return;
@@ -1411,14 +1424,19 @@ async function viewScan(bookId, pcCode = null) {
       // save it as one page, never as a page plus an empty sliver
       const one = mode === "spread" && onlyOnePage();
       const shotMode = one ? "single" : mode;
+      const isRetake = (special && special.kind === "retake") || (!special && retakeNext);
+      const keep = special && special.kind === "retake" && shotMode === "spread" && retakeSide ? [retakeSide] : null;
       const ps = await DB.addCapture(bookId, blob, { rotate: effRotate(), mode: shotMode, filter: book.filter || "magic", lock: lock ? { mode: lock.mode, pts: lock.pts, ...(lock.plain ? { plain: true } : {}) } : null,
-        orders: special ? takeOrders(special.slot, shotMode === "spread" ? 2 : 1) : null });
+        orders: special ? takeOrders(special.slot, keep ? 1 : shotMode === "spread" ? 2 : 1) : null,
+        only: keep, extra: isRetake ? { retaken: Date.now() } : null });
+      retakeNext = false;
       if (special) {
         special.added.push(...ps.map((p) => p.id));
         kickQueue();
         if (special.kind === "retake") {
           await DB.deletePages([special.pageId]);
           toast(`Page ${special.num} replaced ✓`);
+          lastViewed = { bookId, id: ps[0].id };
           go("#/page/" + ps[0].id);
           return;
         }
@@ -1669,7 +1687,7 @@ async function viewScan(bookId, pcCode = null) {
     if (cam.canTorch) $("#torch").classList.remove("hidden");
     getWake();
     DB.askPersist();
-    setStatus(special ? (special.kind === "retake" ? `Retake page ${special.num}: point at the page and tap the button`
+    setStatus(special ? (special.kind === "retake" ? (retakeSide ? `Retake page ${special.num} (${retakeSide === "L" ? "left" : "right"} page): point at the open book and tap the button — only that page is kept` : `Retake page ${special.num}: point at the page and tap the button`)
       : `Add pages after page ${special.num}: tap the button for each photo`)
       : autoOn() ? "Auto: ready — the photo is taken a moment after each page turn" : "Tap the button to shoot");
     if (special) savedAt = performance.now() + 60000;          // keep the instruction on screen
@@ -1745,7 +1763,7 @@ async function placeCaptures(bookId, pageId, kind, files, mode, filter) {
   if (!slot) return [];
   DB.askPersist();
   const all = [];
-  for (const f of files) all.push(...(await DB.addCapture(bookId, f, { mode, filter, orders: takeOrders(slot, mode === "spread" ? 2 : 1) })));
+  for (const f of files) all.push(...(await DB.addCapture(bookId, f, { mode, filter, orders: takeOrders(slot, mode === "spread" ? 2 : 1), extra: kind === "retake" ? { retaken: Date.now() } : null })));
   if (kind === "retake") await DB.deletePages([pageId]);
   kickQueue();
   return all;
@@ -1783,7 +1801,8 @@ async function viewPage(pageId) {
 
   async function show() {
     const idx = list.findIndex((p) => p.id === page.id);
-    $("#ptitle").textContent = `Page ${idx + 1} of ${list.length}`;
+    lastViewed = { bookId, id: page.id };
+    $("#ptitle").textContent = `Page ${idx + 1} of ${list.length}` + (page.retaken ? " · ↻ Retaken" : "");
     $("#prev").disabled = idx <= 0;
     $("#next").disabled = idx >= list.length - 1;
     app.querySelectorAll(".fbtn").forEach((b) => b.classList.toggle("active", b.dataset.f === page.filter));

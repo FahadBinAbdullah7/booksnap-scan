@@ -125,7 +125,8 @@ export async function deleteBook(bookId) {
 // ---------------------------------------------------------------- captures & pages
 // One photo -> 1 page (single) or 2 pages (spread: left first, then right).
 // `orders`: put the new page(s) at these positions (retake / add a page in between) instead of at the end
-export async function addCapture(bookId, blob, { rotate = 0, mode = "spread", filter = "magic", lock = null, orders = null } = {}) {
+// `only`: keep just these sides of a 2-page photo (retake of a left or right page) · `extra`: page fields (retaken)
+export async function addCapture(bookId, blob, { rotate = 0, mode = "spread", filter = "magic", lock = null, orders = null, only = null, extra = null } = {}) {
   blob = await pack(blob);
   return run(["books", "captures", "pages"], "readwrite", (t) => new Promise((res, rej) => {
     const bs = t.objectStore("books");
@@ -136,10 +137,10 @@ export async function addCapture(bookId, blob, { rotate = 0, mode = "spread", fi
       if (!b) return rej(new Error("book not found"));
       const cap = { id: uid(), bookId, blob, rotate, mode, lock, created: Date.now() };
       t.objectStore("captures").put(cap);
-      const sides = mode === "spread" ? ["L", "R"] : ["S"];
+      const sides = (mode === "spread" ? ["L", "R"] : ["S"]).filter((sd) => !only || only.includes(sd));
       const pages = sides.map((side, i) => ({
         id: uid(), bookId, captureId: cap.id, side, order: orders && orders[i] != null ? orders[i] : b.nextOrder++,
-        filter, rot: 0, crop: null, status: "pending", rev: 1, created: Date.now(),
+        filter, rot: 0, crop: null, status: "pending", rev: 1, created: Date.now(), ...(extra || {}),
       }));
       for (const p of pages) t.objectStore("pages").put(p);
       b.updated = Date.now();

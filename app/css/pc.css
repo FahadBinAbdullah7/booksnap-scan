@@ -96,3 +96,7 @@ kbd.dark { background: var(--line); color: var(--text); }
 .pv-th span { position: absolute; left: 2px; bottom: 2px; background: rgba(15,23,42,.8); color: #fff; font-size: 10px; padding: 0 5px; border-radius: 99px; line-height: 16px; }
 .pv-th.blurry { border-color: #f59e0b; }
 .pv-th.on { border-color: #22c55e; box-shadow: 0 0 0 2px #22c55e; }
+
+/* ↻ Retaken mark (PC thumbnails and the page viewer strip) */
+.thumbs figure.retaken::before { content: "↻ Retaken"; position: absolute; right: 4px; bottom: 4px; z-index: 1; background: #2563eb; color: #fff; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 99px; }
+.pv-th.retaken::after { content: "↻"; position: absolute; right: 2px; top: 2px; width: 16px; height: 16px; border-radius: 50%; background: #2563eb; color: #fff; font-size: 11px; line-height: 16px; text-align: center; }

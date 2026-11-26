@@ -48,8 +48,11 @@ self.onmessage = async (e) => {
       for (const s of sides) {
         // regular scan: the whole photo as it is (no trimming, tilt fix or line straightening)
         const plain = !!(lock && lock.plain);
+        // locked page area: the page is exactly that area — no extra trimming at the edges
+        const locked = !!(lock && lock.mode === mode);
         const r = P.renderPage(img, geo, s.side, plain
           ? { filter: s.filter, crop: s.crop, rot: s.rot || 0, maxSide, trimFrac: 0, deskew: false, straighten: false }
+          : locked ? { filter: s.filter, crop: s.crop, rot: s.rot || 0, maxSide, trimFrac: 0, gutterFrac: 0 }
           : { filter: s.filter, crop: s.crop, rot: s.rot || 0, maxSide });
         const full = await encode(r.page, s.filter === "bw" ? 0.8 : 0.88);
         const thumb = await encode(P.resize(r.page, 360), 0.7);

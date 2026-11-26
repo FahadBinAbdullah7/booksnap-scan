@@ -51,7 +51,7 @@ export function pageViewer(startOrder, { list, remove, onClose = () => {} }) {
       let u = stripUrls.get(p.blob);
       if (!u) { u = URL.createObjectURL(p.blob); stripUrls.set(p.blob, u); }
       const b = document.createElement("button");
-      b.type = "button"; b.className = "pv-th" + (k === i ? " on" : "") + (p.blurry ? " blurry" : "");
+      b.type = "button"; b.className = "pv-th" + (k === i ? " on" : "") + (p.blurry ? " blurry" : "") + (p.retaken ? " retaken" : "");
       b.innerHTML = `<img alt="" loading="lazy" decoding="async"><span>${Math.round(p.order)}</span>`;
       b.querySelector("img").src = u;
       b.onclick = () => show(k);
@@ -68,7 +68,7 @@ export function pageViewer(startOrder, { list, remove, onClose = () => {} }) {
     url = URL.createObjectURL(p.blob);
     z.reset();
     img.src = url;
-    $("pvTitle").textContent = `Page ${Math.round(p.order)} of ${pages.length}` + (p.blurry ? "  ·  ⚠ looks blurry" : "");
+    $("pvTitle").textContent = `Page ${Math.round(p.order)} of ${pages.length}` + (p.retaken ? "  ·  ↻ Retaken" : "") + (p.blurry ? "  ·  ⚠ looks blurry" : "");
     $("pvPrev").disabled = i === 0;
     $("pvNext").disabled = i === pages.length - 1;
     strip.querySelectorAll(".pv-th").forEach((b, n) => b.classList.toggle("on", n === i));

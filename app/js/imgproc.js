@@ -1719,7 +1719,8 @@ export function straightenLines(page, curlDirs = [1, -1]) {
 
 // ---------------------------------------------------------------- full page pipeline
 // side: "L" | "R" | "S" (single). crop: null (auto) or {quad}. rot: extra page rotation.
-export function renderPage(img, geo, side, { filter = "magic", crop: manual = null, rot = 0, trimFrac = 0.012, deskew = true, maxSide = 3600, straighten = true } = {}) {
+// gutterFrac: extra trim on the book's middle edge (null = default); a locked area uses 0 / 0
+export function renderPage(img, geo, side, { filter = "magic", crop: manual = null, rot = 0, trimFrac = 0.012, gutterFrac = null, deskew = true, maxSide = 3600, straighten = true } = {}) {
   let pg;
   if (geo.mode === "spread") pg = side === "R" ? geo.pages[1] : geo.pages[0];
   else pg = geo.pages[0];
@@ -1730,7 +1731,7 @@ export function renderPage(img, geo, side, { filter = "magic", crop: manual = nu
     // flat page: true perspective correction from the 4 corners
     page = warpQuad(img, pg.quad, maxSide);
     if (geo.found) {
-      const t = trimFrac, g = geo.mode === "spread" ? 0.02 : t;
+      const t = trimFrac, g = gutterFrac != null ? gutterFrac : geo.mode === "spread" ? 0.02 : t;
       const l = side === "R" ? g : t, r = side === "L" ? g : t;
       page = crop(page, page.w * l, page.h * t, page.w * (1 - l - r), page.h * (1 - 2 * t));
     }
@@ -1738,7 +1739,7 @@ export function renderPage(img, geo, side, { filter = "magic", crop: manual = nu
     page = dewarp(img, pg, maxSide);
     if (geo.found) {
       // trim edges; the gutter side gets a bit more (deep shadow / curl)
-      const t = trimFrac, g = geo.mode === "spread" ? 0.025 : t;
+      const t = trimFrac, g = gutterFrac != null ? gutterFrac : geo.mode === "spread" ? 0.025 : t;
       const l = side === "R" ? g : t, r = side === "L" ? g : t;
       page = crop(page, page.w * l, page.h * t, page.w * (1 - l - r), page.h * (1 - 2 * t));
     }
