@@ -383,6 +383,7 @@ a.mode-card { text-decoration: none; }
 .h-book .hc-icon, .kind-hero.h-book { background: linear-gradient(135deg, #22c55e, #0d9488); }
 .h-doc .hc-icon, .kind-hero.h-doc { background: linear-gradient(135deg, #3b82f6, #4f46e5); }
 .h-card .hc-icon, .kind-hero.h-card { background: linear-gradient(135deg, #f59e0b, #ea580c); }
+.h-cheque .hc-icon, .kind-hero.h-cheque { background: linear-gradient(135deg, #0ea5e9, #1d4ed8); }
 .h-passport .hc-icon, .kind-hero.h-passport { background: linear-gradient(135deg, #8b5cf6, #db2777); }
 .h-esign .hc-icon { background: linear-gradient(135deg, #14b8a6, #0369a1); }
 .h-watermark .hc-icon { background: linear-gradient(135deg, #64748b, #1e293b); }

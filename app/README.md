@@ -10,7 +10,7 @@ An installable web app (PWA) for Android and iPhone. Everything is processed and
 | 🔒 Privacy policy | https://booksnap-scanner.vercel.app/privacy |
 | 🤖 Android app (APK) | https://github.com/FahadBinAbdullah7/booksnap-scan/releases/latest |
 
-**Scan:** Book (hands-free Auto, 2-page split), Regular, Card (front + back on one A4), Passport. **PDF tools:** E-sign, Watermark. **Connect:** PC Remote, or receive on another phone.
+**Scan:** Book (hands-free Auto, 2-page split), Regular, Cheque book (1 page per photo, or 2), Card (front + back on one A4), Passport. **PDF tools:** E-sign, Watermark. **Connect:** PC Remote, or receive on another phone.
 
 Website pages: `site.html` (landing, served at `/` and `/home`), `privacy.html` (`/privacy`), `index.html` (phone app, `/app`), `pc.html` (PC Remote, `/pc`). Routes are set in `vercel.json`.
 

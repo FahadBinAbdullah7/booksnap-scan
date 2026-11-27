@@ -32,6 +32,8 @@ const KINDS = {
     empty: "Tap <b>New book</b>, put your book under the phone and start scanning." },
   doc: { icon: "📄", title: "Regular scan", sub: "Documents, receipts, single sheets", newLabel: "＋ New scan", ask: "Scan name", def: () => "Scan " + new Date().toLocaleString(),
     empty: "Plain photos, no page detection — crop, rotate and filter each page afterwards." },
+  cheque: { icon: "🏦", title: "Cheque book scan", sub: "Cheque leaves · 1 page per photo (or 2)", newLabel: "＋ New cheque scan", ask: "Name", def: () => "Cheques " + stamp(),
+    empty: "Scan cheque leaves one per photo — or switch to 2 pages in 🧰. Real colours are kept (filter: Original)." },
   card: { icon: "💳", title: "Card scan", sub: "ID, debit & other cards · front + back on one A4", newLabel: "＋ Scan a card", def: () => "Card " + stamp(),
     empty: "Scan the front, then the back — both come out on one A4 page, ready to print or share." },
   passport: { icon: "🛂", title: "Passport scan", sub: "Photo page (+ another page) on one A4", newLabel: "＋ Scan a passport", def: () => "Passport " + stamp(),
@@ -268,7 +270,7 @@ async function viewLibrary() {
   const books = await DB.listBooks();
   const st = await DB.storageInfo();
   const nOf = (k) => books.filter((b) => kindOf(b) === k).length;
-  const word = { book: ["book", "books"], doc: ["scan", "scans"], card: ["card", "cards"], passport: ["passport", "passports"] };
+  const word = { book: ["book", "books"], doc: ["scan", "scans"], cheque: ["cheque scan", "cheque scans"], card: ["card", "cards"], passport: ["passport", "passports"] };
   app.innerHTML = `
     <header class="bar"><div class="brand"><span class="logo">📚</span> BookSnap</div><div style="flex:1"></div>
       <button class="btn small recv-btn" id="recv" title="Use this phone as the receiver: another phone scans, the pages arrive here">📥 Receive</button>
