@@ -3,13 +3,17 @@
     {
       "source": "/",
       "destination": "/home",
-      "permanent": false
+      "permanent": true
     }
   ],
   "rewrites": [
     {
       "source": "/home",
       "destination": "/site.html"
+    },
+    {
+      "source": "/bn",
+      "destination": "/bn.html"
     },
     {
       "source": "/privacy",
@@ -64,6 +68,15 @@
         {
           "key": "Cache-Control",
           "value": "no-store"
+        }
+      ]
+    },
+    {
+      "source": "/sitemap.xml",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/xml; charset=utf-8"
         }
       ]
     }

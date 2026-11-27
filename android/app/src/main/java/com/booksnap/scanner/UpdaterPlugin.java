@@ -35,6 +35,7 @@ public class UpdaterPlugin extends Plugin {
             JSObject r = new JSObject();
             r.put("version", pi.versionName);
             r.put("build", Build.VERSION.SDK_INT >= 28 ? pi.getLongVersionCode() : pi.versionCode);
+            r.put("store", BuildConfig.PLAY_STORE);      // Google Play edition: no self-update
             call.resolve(r);
         } catch (Exception e) {
             call.reject("no version: " + e.getMessage());
@@ -43,6 +44,7 @@ public class UpdaterPlugin extends Plugin {
 
     @PluginMethod
     public void download(PluginCall call) {
+        if (BuildConfig.PLAY_STORE) { call.reject("updates come from Google Play"); return; }
         String url = call.getString("url");
         if (url == null || !url.startsWith("https://")) { call.reject("bad url"); return; }
         new Thread(() -> {

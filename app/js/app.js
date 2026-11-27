@@ -41,6 +41,8 @@ const KINDS = {
 };
 const kindOf = (b) => (KINDS[b.kind] ? b.kind : "book");
 // real sizes (mm) for the A4 sheet: ID-1 cards and the passport data page (ID-3)
+// a cheque leaf (about 203 × 92 mm) for the cheque book's guide frame in 1-page mode
+const CHEQUE_SPEC = { w: 203, h: 92 };
 const CARD_SPEC = {
   card: { w: 85.6, h: 53.98, steps: ["front side", "back side"], second: "Back side" },
   passport: { w: 125, h: 88, steps: ["photo page", "second page"], second: "Second page" },
@@ -296,7 +298,8 @@ async function viewLibrary() {
       let last = null; try { last = localStorage.getItem("booksnap.lastVersion"); localStorage.setItem("booksnap.lastVersion", v || ""); } catch {}
       if (v && last && last !== v) toast(`✓ Updated to BookSnap ${v}`, 4000);
     });
-    Upd.banner(lib).catch(() => {});
+    // Google Play edition: Play installs updates — no button, no banner
+    Upd.isStoreBuild().then((store) => { if (store) app.querySelector("#chkupd")?.remove(); else Upd.banner(lib).catch(() => {}); });
     app.querySelector("#chkupd").onclick = (e) => { e.preventDefault(); toast("Checking…"); Upd.banner(lib, { force: true, toast }).catch(() => {}); };
   }
 }
@@ -907,16 +910,19 @@ async function viewScan(bookId, pcCode = null) {
   const bookLock = () => (mode in tmpLocks ? tmpLocks[mode] : isRetakeShot ? null : book.lock && book.lock.mode === mode ? book.lock : null);
   let lock = isDoc ? FULL : cardSpec ? null : isRetakeShot ? null : bookLock();
   // card / passport: a frame in the card's shape in the middle of the picture; the photo is cut to it
+  // the guide frame in use: card / passport always; cheque book in 1-page mode
+  const frameSpec = () => cardSpec || (book.kind === "cheque" && mode === "single" ? CHEQUE_SPEC : null);
   const frameLock = () => {
     const { w, h } = cam.size;
     if (!w || !h) return null;
     const r = effRotate() % 180 ? 1 : 0, W = r ? h : w, H = r ? w : h;
-    const A = cardSpec.w / cardSpec.h;
-    let fw = W * 0.92, fh = fw / A;
-    if (fh > H * 0.9) { fh = H * 0.9; fw = fh * A; }
-    const x0 = (W - fw) / 2 / W, x1 = 1 - x0, y0 = (H - fh) / 2 / H, y1 = 1 - y0;
+    // portrait screen: the card / cheque stands upright, so the frame does too
+    const spec = frameSpec(); if (!spec) return null;
+    const A = orient === "portrait" ? spec.h / spec.w : spec.w / spec.h;
     // plain: the card exactly as framed (no trimming, no tilt fix, no line straightening)
-    return { mode: "single", pts: [[x0, y0], [x1, y0], [x1, y1], [x0, y1]], plain: true };
+    // view: the preview's shape — the photo can be wider or taller than the preview (a 16:9
+    // preview is the middle of a 4:3 photo), so the worker moves the frame to the same spot of the photo
+    return { mode: "single", pts: P.cardFramePts(W, H, A), plain: true, frame: A, view: W / H };
   };
   const cardStep = () => (count >= 1 ? 1 : 0);
   const cardMsg = () => (count >= 2 ? "Both sides done — tap Done to see the A4 page"
@@ -963,6 +969,7 @@ async function viewScan(bookId, pcCode = null) {
   const labels = () => {
     seg("segMode", mode);
     $("#lockbtn").textContent = lock ? "🔒 Locked" : "🔓 Lock";
+    if (book.kind === "cheque") $("#lockbtn").classList.toggle("hidden", mode === "single");   // the cheque frame is the area
     $("#lockbtn").classList.toggle("on", !!lock);
     seg("segOrient", orient);
     seg("segAuto", settings.auto ? "auto" : "manual");
@@ -1528,7 +1535,7 @@ async function viewScan(bookId, pcCode = null) {
       const shotMode = one ? "single" : mode;
       const isRetake = (special && special.kind === "retake") || (!special && retakeNext);
       const keep = special && special.kind === "retake" && shotMode === "spread" && retakeSide ? [retakeSide] : null;
-      const ps = await DB.addCapture(bookId, blob, { rotate: effRotate(), mode: shotMode, filter: book.filter || "magic", lock: lock ? { mode: lock.mode, pts: lock.pts, ...(lock.plain ? { plain: true } : {}) } : null,
+      const ps = await DB.addCapture(bookId, blob, { rotate: effRotate(), mode: shotMode, filter: book.filter || "magic", lock: lock ? { mode: lock.mode, pts: lock.pts, ...(lock.plain ? { plain: true } : {}), ...(lock.view ? { view: lock.view } : {}) } : null,
         orders: special ? takeOrders(special.slot, keep ? 1 : shotMode === "spread" ? 2 : 1) : null,
         only: keep, extra: isRetake ? { retaken: Date.now() } : null });
       retakeNext = false;
@@ -1701,7 +1708,7 @@ async function viewScan(bookId, pcCode = null) {
     const { w: vw, h: vh } = cam.size;
     const s = Math.min(cw / vw, ch / vh), ox = (cw - vw * s) / 2, oy = (ch - vh * s) / 2;
     const pt = (fx, fy) => { const [ux, uy] = P.unrotPoint([fx, fy], effRotate()); return [ox + ux * vw * s, oy + uy * vh * s]; };
-    if (cardSpec && lock) {
+    if (frameSpec() && lock) {
       // card guide: darken around the frame, white frame with bold corners
       const q = lock.pts.map(([x, y]) => pt(x, y));
       ctx.fillStyle = "rgba(0,0,0,.5)"; ctx.fillRect(0, 0, cw, ch);
@@ -1755,7 +1762,7 @@ async function viewScan(bookId, pcCode = null) {
   };
   function detectStep() {
     if (isDoc) { geo = null; return; }                       // regular scan: no page detection
-    if (cardSpec) { lock = frameLock(); geo = lock ? P.geoFromLock(lock) : null; drawOverlay(); return; }
+    if (frameSpec()) { lock = frameLock(); geo = lock ? P.geoFromLock(lock) : null; drawOverlay(); return; }
     const checking_ = autoOn() && !paused && !editing;
     if (lock) {
       geo = P.geoFromLock(lock); drawOverlay(); sendGeo();
@@ -1815,6 +1822,7 @@ async function viewScan(bookId, pcCode = null) {
     getWake();
     DB.askPersist();
     if (cardSpec) { setStatus(special ? "Retake: put the card inside the frame and tap the button" : cardMsg()); savedAt = performance.now() + 600000; }
+    else if (frameSpec()) { setStatus("Put the cheque leaf inside the frame and tap the button"); savedAt = performance.now() + 8000; }
     else setStatus(special ? (special.kind === "retake" ? `Retake page ${special.num}: point at the page and tap the button (1 page · Portrait — change in 🧰 if needed)`
       : `Add pages after page ${special.num}: tap the button for each photo`)
       : autoOn() ? "Auto: ready — the photo is taken a moment after each page turn" : "Tap the button to shoot");
@@ -1906,12 +1914,15 @@ async function composeA4(book, pages) {
   const c = document.createElement("canvas"); c.width = A4.w; c.height = A4.h;
   const g = c.getContext("2d");
   g.fillStyle = "#fff"; g.fillRect(0, 0, A4.w, A4.h);
-  const W = px(spec.w), Hmax = px(spec.h) * 1.15, gap = px(14);
+  const gap = px(14);
   let y = px(22);
   for (const p of pages.slice(0, 2)) {
     const b = await DB.getBlob("full:" + p.id);
     if (!b) continue;
     const bmp = await createImageBitmap(b);
+    // scanned upright (portrait screen): the card stands on the page at its real size
+    const up = bmp.height > bmp.width;
+    const W = px(up ? spec.h : spec.w), Hmax = px(up ? spec.w : spec.h) * 1.15;
     let w = W, h = (W * bmp.height) / bmp.width;
     if (h > Hmax) { h = Hmax; w = (h * bmp.width) / bmp.height; }   // a page taken upright: keep it inside the space
     const x = (A4.w - w) / 2;

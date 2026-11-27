@@ -84,7 +84,7 @@ export async function createBook(name, kind = "book") {
     // card / passport: one photo per side, landscape, real colours (front + back on one A4)
     // cheque book: book-style scanning, 1 page per photo by default (2 pages possible), real colours
     : kind === "cheque"
-    ? { id: uid(), name, kind, created: now, updated: now, nextOrder: 1, mode: "single", filter: "original" }
+    ? { id: uid(), name, kind, created: now, updated: now, nextOrder: 1, mode: "single", filter: "original", orient: "landscape" }
     : kind === "card" || kind === "passport"
     ? { id: uid(), name, kind, created: now, updated: now, nextOrder: 1, mode: "single", filter: "original", orient: "landscape" }
     : { id: uid(), name, created: now, updated: now, nextOrder: 1, mode: "spread", filter: "magic" };

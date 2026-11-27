@@ -1,5 +1,5 @@
 {
-  "version": "1.5.5",
-  "apk": "https://github.com/FahadBinAbdullah7/booksnap-scan/releases/download/v1.5.5/BookSnap-v1.5.5.apk",
-  "notes": "New: Cheque book scan (1 page per photo, or 2). Website: landing page and privacy policy."
+  "version": "1.5.6",
+  "apk": "https://github.com/FahadBinAbdullah7/booksnap-scan/releases/download/v1.5.6/BookSnap-v1.5.6.apk",
+  "notes": "Upright frame for cards in portrait, cheque-shaped frame in cheque scan, nothing hidden under the navigation bar, cards keep their exact shape."
 }

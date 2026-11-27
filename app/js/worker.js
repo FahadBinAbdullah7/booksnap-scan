@@ -41,8 +41,12 @@ self.onmessage = async (e) => {
   const { id, type } = e.data;
   try {
     if (type === "process") {
-      const { key, blob, rotate, mode, sides, lock, maxPixels = 20e6, maxSide = 3600 } = e.data;
+      let { key, blob, rotate, mode, sides, lock, maxPixels = 20e6, maxSide = 3600 } = e.data;
       const loaded = await load(key, blob, rotate || 0, lock && lock.mode === mode ? null : mode, maxPixels);
+      // card / passport: the frame was set on the preview; the photo may show more (a 16:9 preview is
+      // the middle of a 4:3 photo, or the other way round) — move the frame to the same spot of the
+      // photo, so the card comes out exactly as framed and keeps its true shape
+      if (lock && lock.view) lock = { ...lock, pts: P.previewToPhoto(lock.pts, lock.view, loaded.img.w / loaded.img.h) };
       const img = loaded.img, geo = lock && lock.mode === mode ? P.geoFromLock(lock) : loaded.geo;
       const pages = [];
       for (const s of sides) {

@@ -3,26 +3,107 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>BookSnap: scan books, documents, cards and passports</title>
-  <meta name="description" content="BookSnap turns your phone into a book scanner. Scan books hands-free, documents, cheque books, ID cards and passports, then make PDFs, sign them and add watermarks. Everything stays on your device.">
+  <title>BookSnap: Free Book Scanner &amp; PDF Document Scanner App</title>
+  <meta name="description" content="Scan whole books hands-free, plus documents, ID cards, passports and cheques, straight to PDF. Sign and watermark PDFs. Free, private, works offline.">
+  <meta name="keywords" content="book scanner, document scanner, PDF scanner, scan to PDF, ID card scanner, passport scanner, cheque scanner, sign PDF, e-sign PDF, watermark PDF, Bangla book scanner, CamScanner alternative">
+  <link rel="canonical" href="https://booksnap-scanner.vercel.app/home">
+  <link rel="alternate" hreflang="en" href="https://booksnap-scanner.vercel.app/home">
+  <link rel="alternate" hreflang="bn" href="https://booksnap-scanner.vercel.app/bn">
+  <link rel="alternate" hreflang="x-default" href="https://booksnap-scanner.vercel.app/home">
+  <meta name="robots" content="index, follow, max-image-preview:large">
   <meta name="theme-color" content="#16a34a">
-  <meta property="og:title" content="BookSnap: your phone is a book scanner">
-  <meta property="og:description" content="Scan books, documents, cards and passports. Make PDFs, e-sign and watermark them. Free, private, on your device.">
+  <meta name="application-name" content="BookSnap">
+  <!-- link previews (WhatsApp, Facebook, X, LinkedIn…) -->
   <meta property="og:type" content="website">
+  <meta property="og:site_name" content="BookSnap">
+  <meta property="og:title" content="BookSnap: Free Book Scanner &amp; PDF Document Scanner">
+  <meta property="og:description" content="Turn the pages and BookSnap takes the photos. It scans books, documents, ID cards and passports to PDF. Free and private.">
+  <meta property="og:url" content="https://booksnap-scanner.vercel.app/home">
+  <meta property="og:image" content="https://booksnap-scanner.vercel.app/icons/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="BookSnap scanning an open book on a phone">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:locale:alternate" content="bn_BD">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="BookSnap: Free Book Scanner &amp; PDF Document Scanner">
+  <meta name="twitter:description" content="Scan books, documents, ID cards and passports to PDF. Sign and watermark PDFs. Free, private, offline.">
+  <meta name="twitter:image" content="https://booksnap-scanner.vercel.app/icons/og-image.png">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="icon" href="icons/icon-192.png" type="image/png" sizes="192x192">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="manifest" href="manifest.webmanifest">
   <link rel="stylesheet" href="css/site.css">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "@id": "https://booksnap-scanner.vercel.app/#website",
+        "url": "https://booksnap-scanner.vercel.app/",
+        "name": "BookSnap",
+        "description": "Free book scanner and PDF document scanner app",
+        "inLanguage": ["en", "bn"]
+      },
+      {
+        "@type": "MobileApplication",
+        "@id": "https://booksnap-scanner.vercel.app/#app",
+        "name": "BookSnap: Book & PDF Scanner",
+        "alternateName": "BookSnap",
+        "operatingSystem": "Android, Web",
+        "applicationCategory": "BusinessApplication",
+        "applicationSubCategory": "Document scanner",
+        "description": "Scan whole books hands-free, plus documents, cheque books, ID cards and passports, to PDF. Sign PDFs and add watermarks. Everything stays on your device.",
+        "url": "https://booksnap-scanner.vercel.app/home",
+        "image": "https://booksnap-scanner.vercel.app/icons/og-image.png",
+        "screenshot": "https://booksnap-scanner.vercel.app/icons/og-image.png",
+        "downloadUrl": "https://github.com/FahadBinAbdullah7/booksnap-scan/releases/latest",
+        "installUrl": "https://booksnap-scanner.vercel.app/app",
+        "inLanguage": ["en", "bn"],
+        "isAccessibleForFree": true,
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+        "featureList": [
+          "Hands-free book scanning with automatic page-turn capture",
+          "Two-page photos split into separate pages",
+          "Document, receipt and cheque book scanning",
+          "ID card scanner: front and back on one A4 page",
+          "Passport scanner",
+          "Sign PDF with your signature, text and date",
+          "Watermark PDF",
+          "Magic Color, grayscale and black-and-white filters",
+          "PC Remote: control the phone camera from a computer",
+          "Works offline; files stay on the device"
+        ]
+      },
+      {
+        "@type": "FAQPage",
+        "mainEntity": [
+          { "@type": "Question", "name": "Is BookSnap free?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. BookSnap is free, with no ads, no account and no page limit." } },
+          { "@type": "Question", "name": "Can I scan a whole book into one PDF?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. In Auto mode BookSnap takes a photo after every page turn, splits two-page photos into left and right pages, and builds one PDF, even for books with hundreds of pages. Very long books can be split into several PDFs." } },
+          { "@type": "Question", "name": "How do I scan both sides of an ID card on one page?", "acceptedAnswer": { "@type": "Answer", "text": "Open Card scan, put the front inside the frame and tap the button, then do the same with the back. BookSnap places both sides on one A4 page at real size, ready to print or share as PDF or JPG." } },
+          { "@type": "Question", "name": "Can I sign a PDF on my phone?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. Open E-sign PDF, choose any PDF or one of your scans, draw your signature or use a photo of it, and place it exactly where it belongs. You can also add text and the date." } },
+          { "@type": "Question", "name": "Are my documents uploaded anywhere?", "acceptedAnswer": { "@type": "Answer", "text": "No. Photos, pages, PDFs and your signature are processed and stored on your own device. They only leave it when you share a file or send pages to your own computer or second phone." } },
+          { "@type": "Question", "name": "Does BookSnap work with Bangla books?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. BookSnap scans Bangla and English books, reads Bangla and English page numbers in Auto mode, and watermarks and signature text can be written in Bangla." } },
+          { "@type": "Question", "name": "Can I control the scanner from my computer?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. Open PC Remote on your computer and scan its QR code with BookSnap. You see the camera live, press Space to take the photo, and pages are saved straight into a folder on the computer." } }
+        ]
+      }
+    ]
+  }
+  </script>
 </head>
 <body>
   <header class="nav">
     <div class="wrap">
-      <a class="logo" href="/home"><span class="mark">📚</span> BookSnap</a>
-      <button class="burger" id="burger" aria-label="Menu" aria-expanded="false" aria-controls="links">☰</button>
-      <nav class="links" id="links">
+      <a class="logo" href="/home" aria-label="BookSnap home"><span class="mark" aria-hidden="true">📚</span> BookSnap</a>
+      <button class="burger" id="burger" aria-label="Open menu" aria-expanded="false" aria-controls="links">☰</button>
+      <nav class="links" id="links" aria-label="Main">
         <a href="#features">Features</a>
         <a href="#how">How it works</a>
         <a href="/app">📱 Phone app</a>
         <a href="/pc">💻 PC Remote</a>
-        <a href="/privacy">Privacy</a>
+        <a href="#faq">FAQ</a>
+        <a href="/bn" hreflang="bn" lang="bn">বাংলা</a>
         <a class="cta" href="#get">Get BookSnap</a>
       </nav>
     </div>
@@ -34,13 +115,13 @@
         <div>
           <span class="pill">📖 <b>Free</b> · No account · Works offline</span>
           <h1>Your phone is now a <span class="grad">book scanner</span>.</h1>
-          <p class="lead">Turn the pages, and BookSnap takes the photos. It finds each page, splits two-page photos, makes them crisp and clean, and builds the PDF. It handles documents, ID cards and passports too.</p>
+          <p class="lead">BookSnap is a free <strong>book scanner</strong> and <strong>PDF document scanner</strong>. Turn the pages, and it takes the photos. It finds each page, splits two-page photos, cleans them like a real scanner, and builds the PDF. It also scans documents, cheque books, <strong>ID cards</strong> and <strong>passports</strong>, and can <strong>sign</strong> and <strong>watermark PDFs</strong>.</p>
           <div class="btns">
             <a class="btn primary" href="#get">⬇ Get the Android app</a>
-            <a class="btn" href="/app">📱 Open in the browser</a>
+            <a class="btn" href="/app">📱 Scan in your browser</a>
             <a class="btn" href="/pc">💻 Use from a PC</a>
           </div>
-          <div class="trust"><span>🔒 Pages stay on your device</span><span>🚫 No ads, no tracking</span><span>📚 Bangla &amp; English books</span></div>
+          <div class="trust"><span>🔒 Files stay on your device</span><span>🚫 No ads, no tracking</span><span>📚 Bangla &amp; English books</span></div>
         </div>
         <div class="hero-art" aria-hidden="true">
           <div class="phone">
@@ -62,63 +143,81 @@
       </div>
     </section>
 
-    <section id="features">
+    <section id="features" aria-labelledby="features-h">
       <div class="wrap">
         <div class="sec-h">
           <div class="k">Features</div>
-          <h2>Everything you need to digitise paper</h2>
-          <p>One app for whole books, everyday documents, cards and PDFs.</p>
+          <h2 id="features-h">One scanner app for books, documents, cards and PDFs</h2>
+          <p>Everything a scanner does, on your phone, without uploading your files.</p>
         </div>
         <div class="grid">
-          <div class="card"><div class="ic g1">📖</div><h3>Book scan</h3><p>Hands-free Auto mode shoots after every page turn, skips repeats, and splits two-page photos into separate pages.</p></div>
-          <div class="card"><div class="ic g2">📄</div><h3>Regular scan</h3><p>Documents, receipts and single sheets. You can crop, rotate and choose a colour filter for each page.</p></div>
-          <div class="card"><div class="ic g3">💳</div><h3>Card scan</h3><p>Front, then back. Both sides land on one A4 page at real size, ready to print or share.</p></div>
-          <div class="card"><div class="ic g4">🛂</div><h3>Passport scan</h3><p>The photo page, plus another page if you need it, on one clean A4 sheet.</p></div>
-          <div class="card"><div class="ic g5">✍️</div><h3>E-sign PDF</h3><p>Draw or photograph your signature, then place it exactly where it belongs. You can add text and the date too.</p></div>
-          <div class="card"><div class="ic g6">💧</div><h3>Watermark PDF</h3><p>Put your text in the middle of every page at 10% opacity, in any language, with a live preview.</p></div>
-          <div class="card"><div class="ic g8">🏦</div><h3>Cheque book scan</h3><p>Scan cheque leaves one per photo, or two side by side. Their real colours are kept.</p></div>
-          <div class="card"><div class="ic g7">💻</div><h3>PC Remote &amp; receiver</h3><p>Control the camera from your computer and save pages straight into a folder. A second phone can be the receiver too.</p></div>
+          <article class="card"><div class="ic g1" aria-hidden="true">📖</div><h3>Book scanner</h3><p>Hands-free Auto mode shoots after every page turn, skips repeats, and splits two-page photos into separate pages. Whole books become one PDF.</p></article>
+          <article class="card"><div class="ic g2" aria-hidden="true">📄</div><h3>Document scanner</h3><p>Scan documents, receipts and letters to PDF. You can crop, rotate and choose Magic Color, grayscale or black-and-white for each page.</p></article>
+          <article class="card"><div class="ic g8" aria-hidden="true">🏦</div><h3>Cheque book scanner</h3><p>Scan cheque leaves one per photo, or two side by side. Their real colours are kept.</p></article>
+          <article class="card"><div class="ic g3" aria-hidden="true">💳</div><h3>ID card scanner</h3><p>Scan the front, then the back. Both sides of your ID card, debit card or member card land on one A4 page at real size.</p></article>
+          <article class="card"><div class="ic g4" aria-hidden="true">🛂</div><h3>Passport scanner</h3><p>The passport photo page, plus a second page if you need it, on one clean A4 sheet.</p></article>
+          <article class="card"><div class="ic g5" aria-hidden="true">✍️</div><h3>Sign PDF (e-sign)</h3><p>Draw or photograph your signature, then place it exactly where it belongs on any PDF. You can add text and the date too.</p></article>
+          <article class="card"><div class="ic g6" aria-hidden="true">💧</div><h3>Watermark PDF</h3><p>Put your text in the middle of every page at 10% opacity, in any language, with a preview of every page.</p></article>
+          <article class="card"><div class="ic g7" aria-hidden="true">💻</div><h3>PC Remote &amp; receiver</h3><p>Control the phone camera from your computer and save pages straight into a folder. A second phone can be the receiver too.</p></article>
         </div>
       </div>
     </section>
 
-    <section id="how">
+    <section id="how" aria-labelledby="how-h">
       <div class="wrap">
         <div class="sec-h">
           <div class="k">How it works</div>
-          <h2>Three steps to a finished PDF</h2>
-          <p>No scanner, no cables and no account.</p>
+          <h2 id="how-h">How to scan a book to PDF in three steps</h2>
+          <p>No flatbed scanner, no cables and no account.</p>
         </div>
-        <div class="steps">
-          <div class="card step"><h3>Hold the phone over the book</h3><p>Lean it on a stand or a stack of books. BookSnap outlines the pages live, and you can lock the area once.</p></div>
-          <div class="card step"><h3>Turn the pages</h3><p>In Auto mode the photo is taken a moment after each page turn. Blurry pages and repeats are caught for you.</p></div>
-          <div class="card step"><h3>Get your PDF</h3><p>Pages are cleaned like a real scanner and put in order. Save one PDF, split very long books into parts, or share.</p></div>
-        </div>
+        <ol class="steps" style="list-style:none;padding:0;margin:0">
+          <li class="card step"><h3>Hold the phone over the book</h3><p>Lean it on a stand or a stack of books. BookSnap outlines the pages live, and you can lock the page area once.</p></li>
+          <li class="card step"><h3>Turn the pages</h3><p>In Auto mode the photo is taken a moment after each page turn. Blurry pages and repeats are caught for you.</p></li>
+          <li class="card step"><h3>Save your PDF</h3><p>Pages are cleaned like a real scanner and put in order. Save one PDF, split very long books into parts, or share.</p></li>
+        </ol>
       </div>
     </section>
 
-    <section id="open">
+    <section id="open" aria-labelledby="open-h">
       <div class="wrap">
         <div class="sec-h">
           <div class="k">Open BookSnap</div>
-          <h2>On your phone, or from your computer</h2>
+          <h2 id="open-h">Scan on your phone, or control it from your computer</h2>
         </div>
         <div class="split">
-          <a class="card go" href="/app"><div class="ic g1">📱</div><h3>Phone app (in the browser)</h3><p>Open BookSnap right in your phone's browser. Nothing to install, and you can add it to your home screen.</p><span class="more">Open the phone app →</span></a>
-          <a class="card go" href="/pc"><div class="ic g7">💻</div><h3>PC Remote</h3><p>Open this on your computer, then scan the QR code with BookSnap on your phone to control the camera and save pages to a folder.</p><span class="more">Open PC Remote →</span></a>
+          <a class="card go" href="/app"><div class="ic g1" aria-hidden="true">📱</div><h3>BookSnap web app for phones</h3><p>Open the document scanner right in your phone's browser. Nothing to install, and you can add it to your home screen.</p><span class="more">Open the phone scanner →</span></a>
+          <a class="card go" href="/pc"><div class="ic g7" aria-hidden="true">💻</div><h3>BookSnap PC Remote</h3><p>Open this on your computer, then scan its QR code with BookSnap to see the camera, take photos with the Space key, and save pages to a folder.</p><span class="more">Open PC Remote →</span></a>
         </div>
       </div>
     </section>
 
-    <section id="get">
+    <section id="faq" aria-labelledby="faq-h">
+      <div class="wrap">
+        <div class="sec-h">
+          <div class="k">FAQ</div>
+          <h2 id="faq-h">Frequently asked questions</h2>
+        </div>
+        <div class="faq">
+          <details><summary>Is BookSnap free?</summary><p>Yes. BookSnap is free, with no ads, no account and no page limit.</p></details>
+          <details><summary>Can I scan a whole book into one PDF?</summary><p>Yes. In Auto mode BookSnap takes a photo after every page turn, splits two-page photos into left and right pages, and builds one PDF, even for books with hundreds of pages. Very long books can be split into several PDFs.</p></details>
+          <details><summary>How do I scan both sides of an ID card on one page?</summary><p>Open <b>Card scan</b>, put the front inside the frame and tap the button, then do the same with the back. BookSnap places both sides on one A4 page at real size, ready to print or share as PDF or JPG.</p></details>
+          <details><summary>Can I sign a PDF on my phone?</summary><p>Yes. Open <b>E-sign PDF</b>, choose any PDF or one of your scans, draw your signature or use a photo of it, and place it exactly where it belongs. You can also add text and the date.</p></details>
+          <details><summary>Are my documents uploaded anywhere?</summary><p>No. Photos, pages, PDFs and your signature are processed and stored on your own device. They only leave it when you share a file or send pages to your own computer or second phone. Read the <a href="/privacy">privacy policy</a>.</p></details>
+          <details><summary>Does BookSnap work with Bangla books?</summary><p>Yes. BookSnap scans Bangla and English books, reads Bangla and English page numbers in Auto mode, and watermarks and signature text can be written in Bangla.</p></details>
+          <details><summary>Can I control the scanner from my computer?</summary><p>Yes. Open <a href="/pc">PC Remote</a> on your computer and scan its QR code with BookSnap. You see the camera live, press Space to take the photo, and pages are saved straight into a folder on the computer.</p></details>
+        </div>
+      </div>
+    </section>
+
+    <section id="get" aria-labelledby="get-h">
       <div class="wrap">
         <div class="band">
           <div>
-            <h2>Get BookSnap for Android</h2>
+            <h2 id="get-h">Get BookSnap for Android</h2>
             <p>The Android app has the sharpest camera, hardware shutter keys (volume buttons and Bluetooth remotes), and saves PDFs straight into your Documents folder.</p>
           </div>
           <div class="btns" style="justify-content:flex-end">
-            <a class="btn primary" href="https://github.com/FahadBinAbdullah7/booksnap-scan/releases/latest">⬇ Download the app <small>Android · free</small></a>
+            <a class="btn primary" href="https://github.com/FahadBinAbdullah7/booksnap-scan/releases/latest" rel="noopener">⬇ Download BookSnap <small>Android · free</small></a>
           </div>
         </div>
       </div>
@@ -127,12 +226,13 @@
 
   <footer>
     <div class="wrap">
-      <a class="logo" href="/home"><span class="mark">📚</span> BookSnap</a>
-      <nav>
-        <a href="/app">Phone app</a>
+      <a class="logo" href="/home"><span class="mark" aria-hidden="true">📚</span> BookSnap</a>
+      <nav aria-label="Footer">
+        <a href="/app">Phone scanner</a>
         <a href="/pc">PC Remote</a>
         <a href="/privacy">Privacy policy</a>
-        <a href="https://github.com/FahadBinAbdullah7/booksnap-scanner-web">Source code</a>
+        <a href="/bn" hreflang="bn" lang="bn">বাংলা</a>
+        <a href="https://github.com/FahadBinAbdullah7/booksnap-scanner-web" rel="noopener">Source code</a>
       </nav>
       <span>© <span id="yr">2026</span> BookSnap</span>
     </div>

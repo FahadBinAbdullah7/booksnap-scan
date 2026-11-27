@@ -1719,6 +1719,24 @@ export function straightenLines(page, curlDirs = [1, -1]) {
 
 // ---------------------------------------------------------------- full page pipeline
 // side: "L" | "R" | "S" (single). crop: null (auto) or {quad}. rot: extra page rotation.
+// card / passport guide frame: the largest centred rectangle of aspect A inside 92 % × 90 % of a
+// W × H picture, as corner fractions (top-left, top-right, bottom-right, bottom-left)
+export function cardFramePts(W, H, A) {
+  let fw = W * 0.92, fh = fw / A;
+  if (fh > H * 0.9) { fh = H * 0.9; fw = fh * A; }
+  const x0 = (W - fw) / 2 / W, x1 = 1 - x0, y0 = (H - fh) / 2 / H, y1 = 1 - y0;
+  return [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
+}
+
+// corner fractions on the preview -> the same spot on the photo, when the preview (aspect Av) is the
+// centred crop of a photo with another aspect Ap
+export function previewToPhoto(pts, Av, Ap) {
+  if (!Av || !Ap || Math.abs(Av - Ap) < 0.01) return pts;
+  return Ap > Av
+    ? pts.map(([x, y]) => [0.5 + (x - 0.5) * (Av / Ap), y])        // photo is wider: preview = its middle columns
+    : pts.map(([x, y]) => [x, 0.5 + (y - 0.5) * (Ap / Av)]);       // photo is taller: preview = its middle rows
+}
+
 // gutterFrac: extra trim on the book's middle edge (null = default); a locked area uses 0 / 0
 export function renderPage(img, geo, side, { filter = "magic", crop: manual = null, rot = 0, trimFrac = 0.012, gutterFrac = null, deskew = true, maxSide = 3600, straighten = true } = {}) {
   let pg;

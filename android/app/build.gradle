@@ -34,6 +34,16 @@ android {
             keyPassword System.getenv("BOOKSNAP_KEY_PASSWORD") ?: "android"
         }
     }
+    // Two editions of the same app:
+    //  - github: the APK on GitHub releases, with the in-app "Check for updates"
+    //  - play:   the Google Play bundle (.aab) — no self-updater, no install-APK permission
+    //            (Google Play delivers updates itself and does not allow apps to install APKs)
+    flavorDimensions = ["dist"]
+    productFlavors {
+        github { dimension "dist"; buildConfigField "boolean", "PLAY_STORE", "false" }
+        play { dimension "dist"; buildConfigField "boolean", "PLAY_STORE", "true" }
+    }
+    buildFeatures { buildConfig = true }
     buildTypes {
         release {
             signingConfig signingConfigs.release

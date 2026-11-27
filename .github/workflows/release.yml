@@ -60,15 +60,17 @@ jobs:
           BOOKSNAP_KEY_PASSWORD: ${{ secrets.BOOKSNAP_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon
-          cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/BookSnap-v$APP_VERSION.apk"
+          ./gradlew assembleGithubRelease bundlePlayRelease --no-daemon
+          cp app/build/outputs/apk/github/release/app-github-release.apk "$GITHUB_WORKSPACE/BookSnap-v$APP_VERSION.apk"
+          # Google Play edition (upload this .aab in Play Console)
+          cp app/build/outputs/bundle/playRelease/app-play-release.aab "$GITHUB_WORKSPACE/BookSnap-v$APP_VERSION-play.aab"
 
       - name: Publish to the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" "BookSnap-v$APP_VERSION.apk" --clobber
+            gh release upload "$GITHUB_REF_NAME" "BookSnap-v$APP_VERSION.apk" "BookSnap-v$APP_VERSION-play.aab" --clobber
           else
-            gh release create "$GITHUB_REF_NAME" "BookSnap-v$APP_VERSION.apk" --title "BookSnap $APP_VERSION" --generate-notes
+            gh release create "$GITHUB_REF_NAME" "BookSnap-v$APP_VERSION.apk" "BookSnap-v$APP_VERSION-play.aab" --title "BookSnap $APP_VERSION" --generate-notes
           fi

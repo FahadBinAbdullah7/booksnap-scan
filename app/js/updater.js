@@ -16,6 +16,13 @@ export function newer(a, b) {
   return false;
 }
 
+// Google Play edition: Play updates the app, so no update check or download here
+let storeBuild = null;
+export async function isStoreBuild() {
+  if (storeBuild == null) { try { storeBuild = isAndroid() && !!(await U.info()).store; } catch { storeBuild = false; } }
+  return storeBuild;
+}
+
 export async function installedVersion() {
   if (!isAndroid()) return null;
   try { return (await U.info()).version; } catch { return null; }
@@ -57,6 +64,7 @@ async function latest(force) {
 
 // a newer release than the installed app, or null
 export async function check(force = false) {
+  if (await isStoreBuild()) return null;
   const cur = await installedVersion();
   if (!cur) return null;
   const rel = await latest(force);

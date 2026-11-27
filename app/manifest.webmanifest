@@ -1,7 +1,7 @@
 {
-  "name": "BookSnap Book Scanner",
+  "name": "BookSnap: Book & PDF Scanner",
   "short_name": "BookSnap",
-  "description": "Scan whole books: auto-capture, two-page split, flattening, Magic Color, PDF.",
+  "description": "Scan books hands-free, plus documents, cheque books, ID cards and passports, to PDF. Sign and watermark PDFs. Files stay on your device.",
   "start_url": "index.html",
   "scope": "./",
   "display": "standalone",
@@ -9,8 +9,27 @@
   "background_color": "#0f172a",
   "theme_color": "#0f172a",
   "icons": [
-    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
-    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
-  ]
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": [
+    "productivity",
+    "utilities",
+    "books"
+  ],
+  "lang": "en"
 }
