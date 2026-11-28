@@ -27,3 +27,6 @@ book.pdf
 .DS_Store
 android/app/src/main/assets/capacitor.config.json
 android/app/src/main/assets/capacitor.plugins.json
+
+# Google Play upload key + its password (keep a backup, never commit)
+play-signing/

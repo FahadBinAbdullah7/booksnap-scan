@@ -26,7 +26,19 @@ android {
     // One signing key for every build, so installed apps can update in place.
     // GitHub Actions passes the key from repository secrets; on this Mac it falls back
     // to the key the first APKs were signed with (~/.android/debug.keystore).
+    // Google Play upload key: only on this Mac, in play-signing/ (git-ignored, keep a backup)
+    def playProps = new Properties()
+    def playPropsFile = rootProject.file("../play-signing/upload.properties")
+    if (playPropsFile.exists()) playPropsFile.withInputStream { playProps.load(it) }
     signingConfigs {
+        if (playPropsFile.exists()) {
+            play {
+                storeFile new File(playPropsFile.parentFile, playProps.getProperty("storeFile"))
+                storePassword playProps.getProperty("storePassword")
+                keyAlias playProps.getProperty("keyAlias")
+                keyPassword playProps.getProperty("keyPassword")
+            }
+        }
         release {
             storeFile file(System.getenv("BOOKSNAP_KEYSTORE") ?: "${System.getProperty('user.home')}/.android/debug.keystore")
             storePassword System.getenv("BOOKSNAP_KEYSTORE_PASSWORD") ?: "android"
@@ -40,13 +52,15 @@ android {
     //            (Google Play delivers updates itself and does not allow apps to install APKs)
     flavorDimensions = ["dist"]
     productFlavors {
-        github { dimension "dist"; buildConfigField "boolean", "PLAY_STORE", "false" }
-        play { dimension "dist"; buildConfigField "boolean", "PLAY_STORE", "true" }
+        github { dimension "dist"; buildConfigField "boolean", "PLAY_STORE", "false"; signingConfig signingConfigs.release }
+        // Google Play refuses debug-signed bundles: sign with the Play upload key when it is on this Mac
+        play { dimension "dist"; buildConfigField "boolean", "PLAY_STORE", "true"
+               signingConfig playPropsFile.exists() ? signingConfigs.play : signingConfigs.release }
     }
     buildFeatures { buildConfig = true }
     buildTypes {
         release {
-            signingConfig signingConfigs.release
+            // signing comes from the edition (github / play) above
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
